@@ -1,0 +1,2633 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Ventas Diario · PF & VU</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── RESET & BASE ─────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #F7F8FA;
+  --surface: #FFFFFF;
+  --surface2: #F0F2F5;
+  --border: #E4E7EC;
+  --text: #0D1117;
+  --text2: #4B5563;
+  --text3: #9CA3AF;
+  --pf: #0A2540;
+  --vu: #1B4332;
+  --accent: #2563EB;
+  --green: #16A34A;
+  --yellow: #CA8A04;
+  --red: #DC2626;
+  --green-bg: #F0FDF4;
+  --yellow-bg: #FEFCE8;
+  --red-bg: #FEF2F2;
+  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.08);
+  --radius: 10px;
+  --font: 'DM Sans', sans-serif;
+  --mono: 'DM Mono', monospace;
+}
+html { font-size: 14px; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ── SCROLLBAR ───────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── LAYOUT ──────────────────────────────────────────── */
+.app { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ── TOPBAR ──────────────────────────────────────────── */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: #0D1117;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 28px; height: 62px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.35);
+}
+.topbar-left { display: flex; align-items: center; gap: 16px; }
+.logo {
+  font-size: 17px; font-weight: 800; letter-spacing: .5px;
+  color: #FFFFFF; text-transform: uppercase;
+}
+.logo span { color: var(--green); }
+.logo-divider {
+  width: 1px; height: 22px; background: rgba(255,255,255,.15);
+}
+.logo-sub {
+  font-size: 10px; font-weight: 500; color: rgba(255,255,255,.45);
+  letter-spacing: 1.2px; text-transform: uppercase;
+}
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; flex-shrink:0; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.ts { font-size: 11px; color: rgba(255,255,255,.4); font-family: var(--mono); }
+.btn-export {
+  padding: 6px 14px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.07);
+  font-family: var(--font); font-size: 11px; font-weight: 600;
+  color: rgba(255,255,255,.85); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+  transition: all .15s;
+}
+.btn-export:hover { background: var(--green); border-color: var(--green); color: #fff; }
+
+/* ── COMPANY TOGGLE ──────────────────────────────────── */
+.company-bar {
+  background: #161B22;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  padding: 9px 28px;
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+}
+.company-bar-label {
+  font-size: 10px; font-weight: 700; color: rgba(255,255,255,.3);
+  text-transform: uppercase; letter-spacing: 1px; margin-right: 4px;
+}
+.co-btn {
+  padding: 5px 16px; border-radius: 20px;
+  border: 1.5px solid rgba(255,255,255,.15);
+  background: transparent; cursor: pointer; font-family: var(--font);
+  font-size: 12px; font-weight: 600; color: rgba(255,255,255,.55);
+  transition: all .15s; letter-spacing: .2px;
+}
+.co-btn:hover { border-color: var(--green); color: #fff; }
+.co-btn.active-all { background: var(--green); border-color: var(--green); color: #fff; }
+.co-btn.active-pf  { background: var(--green); border-color: var(--green); color: #fff; }
+.co-btn.active-vu  { background: var(--green); border-color: var(--green); color: #fff; }
+.sep { color: var(--border); font-size: 16px; }
+
+/* ── FILTROS ─────────────────────────────────────────── */
+.filters-bar {
+  background: #1C2128;
+  border-bottom: 2px solid var(--green);
+  padding: 8px 28px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.filter-group { display: flex; align-items: center; gap: 6px; }
+.filter-label {
+  font-size: 10px; font-weight: 700; color: rgba(255,255,255,.4);
+  text-transform: uppercase; letter-spacing: .6px;
+}
+select.filter-sel {
+  padding: 4px 10px; border: 1px solid rgba(255,255,255,.12); border-radius: 6px;
+  background: rgba(255,255,255,.06); font-family: var(--font); font-size: 12px;
+  color: #fff; cursor: pointer; outline: none; transition: border-color .15s;
+}
+select.filter-sel:focus { border-color: var(--green); }
+select.filter-sel option { background: #1C2128; color: #fff; }
+.btn-reset {
+  padding: 4px 12px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: transparent; font-family: var(--font); font-size: 11px;
+  color: rgba(255,255,255,.45); cursor: pointer; transition: all .15s;
+}
+.btn-reset:hover { border-color: var(--red); color: var(--red); }
+
+/* ── TABS ────────────────────────────────────────────── */
+.tabs-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  display: flex; gap: 0;
+  box-shadow: var(--shadow);
+}
+.tab-btn {
+  padding: 14px 18px; border: none; background: transparent;
+  font-family: var(--font); font-size: 13px; font-weight: 500;
+  color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent;
+  transition: all .15s; white-space: nowrap;
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.tab-btn:hover:not(.active) { color: var(--text2); }
+
+/* ── MAIN CONTENT ────────────────────────────────────── */
+.main { padding: 24px; max-width: 1400px; margin: 0 auto; width: 100%; }
+.view { display: none; }
+.view.active { display: block; }
+
+/* ── UPLOAD ZONE ─────────────────────────────────────── */
+.upload-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+.upload-section-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .8px; color: var(--text3); margin-bottom: 14px;
+}
+.upload-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.upload-card {
+  border: 1.5px dashed var(--border); border-radius: 8px; padding: 12px;
+  cursor: pointer; transition: all .2s; position: relative; overflow: hidden;
+  background: var(--bg);
+}
+.upload-card:hover { border-color: var(--accent); background: #EFF6FF; }
+.upload-card.loaded { border-style: solid; border-color: var(--green); background: var(--green-bg); }
+.upload-card input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.uc-icon { font-size: 20px; margin-bottom: 6px; }
+.uc-label { font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 2px; }
+.uc-sub { font-size: 10px; color: var(--text3); }
+.uc-status { font-size: 10px; color: var(--green); font-weight: 600; margin-top: 4px; }
+.btn-clear-storage {
+  margin-top: 12px; padding: 5px 12px; border: 1px solid var(--red);
+  border-radius: 6px; background: transparent; color: var(--red);
+  font-family: var(--font); font-size: 11px; cursor: pointer;
+}
+
+/* ── KPI CARDS ───────────────────────────────────────── */
+.section-title {
+  font-size: 13px; font-weight: 700; color: var(--text2);
+  text-transform: uppercase; letter-spacing: .7px;
+  margin: 24px 0 12px; display: flex; align-items: center; gap: 8px;
+}
+.section-title::after { content:''; flex:1; height:1px; background: var(--border); }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px;
+  box-shadow: var(--shadow); position: relative; overflow: hidden;
+  transition: box-shadow .2s;
+}
+.kpi-card:hover { box-shadow: var(--shadow-md); }
+.kpi-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--accent);
+}
+.kpi-card.green::before { background: var(--green); }
+.kpi-card.yellow::before { background: #F59E0B; }
+.kpi-card.red::before { background: var(--red); }
+.kpi-label { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+.kpi-value { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1; margin-bottom: 6px; font-family: var(--mono); }
+.kpi-value.sm { font-size: 18px; }
+.kpi-sub { font-size: 11px; color: var(--text2); }
+.kpi-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 700;
+  margin-top: 4px;
+}
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-yellow { background: var(--yellow-bg); color: var(--yellow); }
+.badge-red { background: var(--red-bg); color: var(--red); }
+
+/* ── SEMAFORO ────────────────────────────────────────── */
+.semaforo {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 700;
+}
+.sem-dot { width: 8px; height: 8px; border-radius: 50%; }
+.sem-green .sem-dot { background: var(--green); }
+.sem-yellow .sem-dot { background: #F59E0B; }
+.sem-red .sem-dot { background: var(--red); }
+
+/* ── CHARTS GRID ─────────────────────────────────────── */
+.charts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.chart-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+  box-shadow: var(--shadow);
+}
+.chart-title { font-size: 12px; font-weight: 700; color: var(--text2); margin-bottom: 16px; text-transform: uppercase; letter-spacing: .5px; }
+.chart-wrap { position: relative; height: 220px; }
+
+/* ── RANKING ─────────────────────────────────────────── */
+.ranking-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.ranking-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+  box-shadow: var(--shadow);
+}
+.ranking-title { font-size: 12px; font-weight: 700; color: var(--text2); margin-bottom: 14px; text-transform: uppercase; letter-spacing: .5px; }
+.ranking-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.ranking-item:last-child { border-bottom: none; }
+.rank-pos {
+  width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0;
+}
+.pos-1 { background: #FEF08A; color: #854D0E; }
+.pos-2 { background: #E5E7EB; color: #374151; }
+.pos-3 { background: #FED7AA; color: #7C2D12; }
+.rank-info { flex: 1; min-width: 0; }
+.rank-name { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rank-sub { font-size: 10px; color: var(--text3); margin-top: 1px; }
+.rank-val { text-align: right; flex-shrink: 0; }
+.rank-main { font-size: 13px; font-weight: 700; color: var(--text); font-family: var(--mono); }
+.rank-sec { font-size: 10px; color: var(--text3); }
+
+/* ── PROGRESS BAR ────────────────────────────────────── */
+.progress-wrap { margin-top: 6px; }
+.progress-bar-bg { background: var(--surface2); border-radius: 3px; height: 4px; overflow: hidden; }
+.progress-bar-fill { height: 100%; border-radius: 3px; transition: width .5s ease; }
+.fill-green { background: var(--green); }
+.fill-yellow { background: #F59E0B; }
+.fill-red { background: var(--red); }
+
+/* ── TABLA ───────────────────────────────────────────── */
+.table-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  box-shadow: var(--shadow); margin-bottom: 24px;
+}
+.table-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.table-header-title { font-size: 12px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  padding: 10px 14px; font-size: 10px; font-weight: 700; color: var(--text3);
+  text-transform: uppercase; letter-spacing: .5px; text-align: left;
+  background: var(--bg); border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+thead th.num { text-align: right; }
+tbody tr { transition: background .1s; }
+tbody tr:hover { background: var(--bg); }
+tbody tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+tbody td { padding: 10px 14px; font-size: 12px; color: var(--text); }
+tbody td.num { text-align: right; font-family: var(--mono); font-size: 11px; }
+tbody td.name { font-weight: 500; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── LÍDER CARDS ─────────────────────────────────────── */
+.lider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.lider-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+  box-shadow: var(--shadow);
+}
+.lider-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
+.lider-name { font-size: 14px; font-weight: 700; color: var(--text); }
+.lider-empresa { font-size: 10px; color: var(--text3); margin-top: 2px; }
+.lider-kpis { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.lider-kpi { }
+.lider-kpi-label { font-size: 9px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
+.lider-kpi-val { font-size: 16px; font-weight: 700; color: var(--text); font-family: var(--mono); }
+.lider-kpi-sub { font-size: 9px; color: var(--text2); }
+
+/* ── ASESOR TABLE ────────────────────────────────────── */
+.asesor-section { margin-bottom: 24px; }
+
+/* ── ESTADISTICAS ────────────────────────────────────── */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; margin-bottom: 24px; }
+
+/* ── PROYECCION ──────────────────────────────────────── */
+.proy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+@media(max-width: 900px){ .proy-grid { grid-template-columns: 1fr; } }
+
+/* ── EXPORT BTN ──────────────────────────────────────── */
+.btn-export {
+  padding: 6px 14px; border-radius: 7px; border: 1px solid var(--border);
+  background: var(--surface); font-family: var(--font); font-size: 11px;
+  font-weight: 600; color: var(--text2); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+  transition: all .15s;
+}
+.btn-export:hover { background: var(--text); color: #fff; border-color: var(--text); }
+
+/* ── EMPTY STATE ─────────────────────────────────────── */
+.empty-state {
+  text-align: center; padding: 60px 20px; color: var(--text3);
+}
+.empty-icon { font-size: 40px; margin-bottom: 12px; }
+.empty-title { font-size: 15px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
+.empty-sub { font-size: 12px; }
+
+/* ── ANIMACIONES ─────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity:0; transform: translateY(12px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+.kpi-card, .chart-card, .ranking-card, .lider-card { animation: fadeUp .3s ease both; }
+.kpi-card:nth-child(1){animation-delay:.05s} .kpi-card:nth-child(2){animation-delay:.08s}
+.kpi-card:nth-child(3){animation-delay:.11s} .kpi-card:nth-child(4){animation-delay:.14s}
+.kpi-card:nth-child(5){animation-delay:.17s} .kpi-card:nth-child(6){animation-delay:.20s}
+.kpi-card:nth-child(7){animation-delay:.23s} .kpi-card:nth-child(8){animation-delay:.26s}
+.kpi-card:nth-child(9){animation-delay:.29s}
+
+/* ── TOOLTIP CUSTOM ──────────────────────────────────── */
+.tooltip {
+  position: relative; cursor: help;
+}
+.tooltip::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  background: var(--text); color: #fff; font-size: 10px; padding: 4px 8px;
+  border-radius: 4px; white-space: nowrap; pointer-events: none;
+  opacity: 0; transition: opacity .15s; z-index: 999;
+}
+.tooltip:hover::after { opacity: 1; }
+
+/* ── DIFF CELLS ──────────────────────────────────────── */
+.diff-pos { color: var(--green); font-weight: 600; }
+.diff-neg { color: var(--red);   font-weight: 600; }
+.diff-zero { color: var(--text3); }
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="logo">Control de <span>Ventas</span> Diario</div>
+    <div class="logo-divider"></div>
+    <div class="logo-sub">PF &amp; VU · Dashboard Comercial</div>
+    <div class="live-dot" title="Dashboard activo"></div>
+  </div>
+  <div class="topbar-right">
+    <span class="ts" id="ts-label">—</span>
+    <button class="btn-export" onclick="exportExcel()">⬇ Excel</button>
+    <button class="btn-export" onclick="exportPDF()">⬇ PDF</button>
+  </div>
+</header>
+
+<!-- COMPANY TOGGLE -->
+<div class="company-bar">
+  <span class="company-bar-label">Empresa</span>
+  <button class="co-btn active-all" id="btn-all" onclick="setCompany('all')">Todas</button>
+  <button class="co-btn" id="btn-pf"  onclick="setCompany('PF')">Protección Familiar</button>
+  <button class="co-btn" id="btn-vu"  onclick="setCompany('VU')">Valles Unidos</button>
+</div>
+
+<!-- FILTROS -->
+<div class="filters-bar">
+  <div class="filter-group">
+    <span class="filter-label">Líder</span>
+    <select class="filter-sel" id="f-lider" onchange="applyFilters()">
+      <option value="">Todos</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <span class="filter-label">Asesor</span>
+    <select class="filter-sel" id="f-asesor" onchange="applyFilters()">
+      <option value="">Todos</option>
+    </select>
+  </div>
+  <button class="btn-reset" onclick="resetFilters()">✕ Limpiar</button>
+</div>
+
+<!-- TABS -->
+<div class="tabs-bar">
+  <button class="tab-btn active" onclick="showTab('ejecutivo',this)">📊 Resumen Ejecutivo</button>
+  <button class="tab-btn" onclick="showTab('proyeccion',this)">📈 Proyección</button>
+  <button class="tab-btn" onclick="showTab('lideres',this)">🏆 Por Líder</button>
+  <button class="tab-btn" onclick="showTab('asesores',this)">🧑‍💼 Por Asesor</button>
+  <button class="tab-btn" onclick="showTab('estadisticas',this)">📊 Estadísticas</button>
+  <button class="tab-btn" onclick="showTab('archivos',this)">📂 Archivos</button>
+</div>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- ══ TAB: ARCHIVOS ══════════════════════════════════ -->
+  <div class="view active" id="view-archivos">
+
+    <!-- PANEL VIEWER -->
+    <div class="upload-section" id="gh-viewer-panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div class="upload-section-title" style="margin:0">📊 Estado de Datos</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn-export" onclick="ghCargarTodos()" style="background:var(--green);border-color:var(--green);color:#fff">🔄 Actualizar datos</button>
+          <button class="btn-export" onclick="mostrarPanelAdmin()" style="border-color:var(--text3);color:var(--text3)">🔐 Admin</button>
+        </div>
+      </div>
+      <div id="gh-config-aviso" style="background:#EFF6FF;border:1px solid var(--accent);border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:12px;color:var(--accent);display:none">
+        ⚙️ Configura el repositorio GitHub en el panel administrador para activar la carga automática.
+      </div>
+      <div id="gh-files-status" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:8px"></div>
+      <div id="gh-last-update" style="font-size:10px;color:var(--text3);margin-top:6px"></div>
+    </div>
+
+    <!-- PANEL ADMIN (oculto) -->
+    <div class="upload-section" id="gh-admin-panel" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="upload-section-title" style="margin:0">🔐 Panel Administrador</div>
+        <button class="btn-export" onclick="ocultarPanelAdmin()">✕ Cerrar</button>
+      </div>
+      <div id="gh-login-form">
+        <div style="max-width:380px;margin:0 auto;background:var(--surface2);border-radius:10px;padding:24px">
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">Acceso Administrador</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:16px">Ingresa tu clave para gestionar archivos</div>
+          <input type="password" id="gh-password" placeholder="Contraseña"
+            style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;outline:none;margin-bottom:10px"
+            onkeydown="if(event.key==='Enter') ghVerificarPassword()">
+          <button onclick="ghVerificarPassword()"
+            style="width:100%;padding:9px;background:var(--green);border:none;border-radius:7px;color:#fff;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer">
+            Ingresar
+          </button>
+          <div id="gh-login-error" style="font-size:11px;color:var(--red);margin-top:8px;text-align:center;display:none">❌ Contraseña incorrecta</div>
+        </div>
+      </div>
+      <div id="gh-admin-content" style="display:none">
+        <div style="background:var(--surface2);border-radius:8px;padding:16px;margin-bottom:16px">
+          <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">⚙️ Configuración GitHub</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <div class="filter-label" style="color:var(--text2);margin-bottom:4px">Usuario GitHub</div>
+              <input type="text" id="gh-user" placeholder="mi-usuario"
+                style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+            </div>
+            <div>
+              <div class="filter-label" style="color:var(--text2);margin-bottom:4px">Nombre del Repositorio</div>
+              <input type="text" id="gh-repo" placeholder="cvd-datos"
+                style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+            </div>
+            <div style="grid-column:span 2">
+              <div class="filter-label" style="color:var(--text2);margin-bottom:4px">Token de Acceso Personal (PAT)</div>
+              <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:11px;outline:none">
+              <div style="font-size:10px;color:var(--text3);margin-top:4px">GitHub → Settings → Developer settings → Personal access tokens → Fine-grained → Contents (Read & Write)</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+            <button class="btn-export" onclick="ghGuardarConfig()" style="background:var(--green);border-color:var(--green);color:#fff">💾 Guardar</button>
+            <button class="btn-export" onclick="ghCambiarPassword()">🔑 Cambiar Contraseña</button>
+            <button class="btn-export" onclick="ghCerrarSesion()" style="border-color:var(--red);color:var(--red)">Cerrar Sesión</button>
+          </div>
+        </div>
+        <div style="background:var(--green-bg);border:1px solid var(--green);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:11px;color:var(--green)">
+          ✅ Modo administrador. Los archivos subidos se publicarán en GitHub para todos los usuarios.
+        </div>
+        <div class="upload-section-title">📅 Archivos Mensuales</div>
+        <div class="upload-grid">
+          <div class="upload-card" id="uc-metas-pf"><input type="file" accept=".xlsx,.xls" onchange="ghSubirArchivo(event,'metas_pf','Metas_PF.xlsx')"><div class="uc-icon">🎯</div><div class="uc-label">Metas PF</div><div class="uc-sub">Metas del mes – PF</div><div class="uc-status" id="uc-metas-pf-status"></div></div>
+          <div class="upload-card" id="uc-metas-vu"><input type="file" accept=".xlsx,.xls" onchange="ghSubirArchivo(event,'metas_vu','Metas_VU.xlsx')"><div class="uc-icon">🎯</div><div class="uc-label">Metas VU</div><div class="uc-sub">Metas del mes – VU</div><div class="uc-status" id="uc-metas-vu-status"></div></div>
+          <div class="upload-card" id="uc-lideres"><input type="file" accept=".xlsx,.xls" onchange="ghSubirArchivo(event,'lideres','Lideres_Activos.xlsx')"><div class="uc-icon">👥</div><div class="uc-label">Líderes Activos</div><div class="uc-sub">Lista de líderes</div><div class="uc-status" id="uc-lideres-status"></div></div>
+          <div class="upload-card" id="uc-proy-pf"><input type="file" accept=".xlsx,.xls" onchange="ghSubirArchivo(event,'proy_pf','Proyeccion_PF.xlsx')"><div class="uc-icon">📈</div><div class="uc-label">Proyección PF</div><div class="uc-sub">Ventas por día PF</div><div class="uc-status" id="uc-proy-pf-status"></div></div>
+          <div class="upload-card" id="uc-proy-vu"><input type="file" accept=".xlsx,.xls" onchange="ghSubirArchivo(event,'proy_vu','Proyeccion_VU.xlsx')"><div class="uc-icon">📈</div><div class="uc-label">Proyección VU</div><div class="uc-sub">Ventas por día VU</div><div class="uc-status" id="uc-proy-vu-status"></div></div>
+          <div class="upload-card" id="uc-comisiones"><input type="file" accept=".xlsx,.xls" onchange="ghSubirArchivo(event,'comisiones','Comisiones.xlsx')"><div class="uc-icon">💰</div><div class="uc-label">Tabla Comisiones</div><div class="uc-sub">% por plazo</div><div class="uc-status" id="uc-comisiones-status"></div></div>
+        </div>
+        <div class="upload-section-title" style="margin-top:16px">📆 Archivos Diarios</div>
+        <div class="upload-grid">
+          <div class="upload-card" id="uc-cv-pf"><input type="file" accept=".xlsx,.xls" onchange="ghSubirArchivo(event,'cv_pf','CV_PF.xlsx')"><div class="uc-icon">📋</div><div class="uc-label">Consulta Ventas PF</div><div class="uc-sub">Reporte diario PF</div><div class="uc-status" id="uc-cv-pf-status"></div></div>
+          <div class="upload-card" id="uc-cv-vu"><input type="file" accept=".xlsx,.xls" onchange="ghSubirArchivo(event,'cv_vu','CV_VU.xlsx')"><div class="uc-icon">📋</div><div class="uc-label">Consulta Ventas VU</div><div class="uc-sub">Reporte diario VU</div><div class="uc-status" id="uc-cv-vu-status"></div></div>
+          <div class="upload-card" id="uc-abono-pf"><input type="file" accept=".xlsx,.xls" onchange="ghSubirArchivo(event,'abono_pf','Abono_PF.xlsx')"><div class="uc-icon">✅</div><div class="uc-label">Ventas Abonadas PF</div><div class="uc-sub">Estado = ABONADO</div><div class="uc-status" id="uc-abono-pf-status"></div></div>
+          <div class="upload-card" id="uc-abono-vu"><input type="file" accept=".xlsx,.xls" onchange="ghSubirArchivo(event,'abono_vu','Abono_VU.xlsx')"><div class="uc-icon">✅</div><div class="uc-label">Ventas Abonadas VU</div><div class="uc-sub">Estado = ABONADO</div><div class="uc-status" id="uc-abono-vu-status"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- placeholder para mantener estructura original -->
+    <div class="upload-section" style="display:none">
+      <div class="upload-section-title">📅 Archivos Mensuales (persistentes)</div>
+      <div class="upload-grid">
+        <div class="upload-card" id="uc-metas-pf">
+          <input type="file" accept=".xlsx,.xls" onchange="loadFile(event,'metas_pf')">
+          <div class="uc-icon">🎯</div>
+          <div class="uc-label">Metas PF</div>
+          <div class="uc-sub">Metas del mes – PF</div>
+          <div class="uc-status" id="uc-metas-pf-status"></div>
+        </div>
+        <div class="upload-card" id="uc-metas-vu">
+          <input type="file" accept=".xlsx,.xls" onchange="loadFile(event,'metas_vu')">
+          <div class="uc-icon">🎯</div>
+          <div class="uc-label">Metas VU</div>
+          <div class="uc-sub">Metas del mes – VU</div>
+          <div class="uc-status" id="uc-metas-vu-status"></div>
+        </div>
+        <div class="upload-card" id="uc-lideres">
+          <input type="file" accept=".xlsx,.xls" onchange="loadFile(event,'lideres')">
+          <div class="uc-icon">👥</div>
+          <div class="uc-label">Líderes Activos</div>
+          <div class="uc-sub">Lista de líderes</div>
+          <div class="uc-status" id="uc-lideres-status"></div>
+        </div>
+        <div class="upload-card" id="uc-proy-pf">
+          <input type="file" accept=".xlsx,.xls" onchange="loadFile(event,'proy_pf')">
+          <div class="uc-icon">📈</div>
+          <div class="uc-label">Proyección PF</div>
+          <div class="uc-sub">Ventas por día PF</div>
+          <div class="uc-status" id="uc-proy-pf-status"></div>
+        </div>
+        <div class="upload-card" id="uc-proy-vu">
+          <input type="file" accept=".xlsx,.xls" onchange="loadFile(event,'proy_vu')">
+          <div class="uc-icon">📈</div>
+          <div class="uc-label">Proyección VU</div>
+          <div class="uc-sub">Ventas por día VU</div>
+          <div class="uc-status" id="uc-proy-vu-status"></div>
+        </div>
+        <div class="upload-card" id="uc-comisiones">
+          <input type="file" accept=".xlsx,.xls" onchange="loadFile(event,'comisiones')">
+          <div class="uc-icon">💰</div>
+          <div class="uc-label">Tabla Comisiones</div>
+          <div class="uc-sub">% por plazo</div>
+          <div class="uc-status" id="uc-comisiones-status"></div>
+        </div>
+      </div>
+    </div>
+    <div class="upload-section">
+      <div class="upload-section-title">📆 Archivos Diarios (reemplazar cada día)</div>
+      <div class="upload-grid">
+        <div class="upload-card" id="uc-cv-pf">
+          <input type="file" accept=".xlsx,.xls" onchange="loadFile(event,'cv_pf')">
+          <div class="uc-icon">📋</div>
+          <div class="uc-label">Consulta Ventas PF</div>
+          <div class="uc-sub">Reporte diario PF</div>
+          <div class="uc-status" id="uc-cv-pf-status"></div>
+        </div>
+        <div class="upload-card" id="uc-cv-vu">
+          <input type="file" accept=".xlsx,.xls" onchange="loadFile(event,'cv_vu')">
+          <div class="uc-icon">📋</div>
+          <div class="uc-label">Consulta Ventas VU</div>
+          <div class="uc-sub">Reporte diario VU</div>
+          <div class="uc-status" id="uc-cv-vu-status"></div>
+        </div>
+        <div class="upload-card" id="uc-abono-pf">
+          <input type="file" accept=".xlsx,.xls" onchange="loadFile(event,'abono_pf')">
+          <div class="uc-icon">✅</div>
+          <div class="uc-label">Ventas Abonadas PF</div>
+          <div class="uc-sub">Estado = ABONADO</div>
+          <div class="uc-status" id="uc-abono-pf-status"></div>
+        </div>
+        <div class="upload-card" id="uc-abono-vu">
+          <input type="file" accept=".xlsx,.xls" onchange="loadFile(event,'abono_vu')">
+          <div class="uc-icon">✅</div>
+          <div class="uc-label">Ventas Abonadas VU</div>
+          <div class="uc-sub">Estado = ABONADO</div>
+          <div class="uc-status" id="uc-abono-vu-status"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: EJECUTIVO ════════════════════════════════ -->
+  <div class="view" id="view-ejecutivo">
+    <div id="ejecutivo-content">
+      <div class="empty-state">
+        <div class="empty-icon">📂</div>
+        <div class="empty-title">Carga los archivos para ver el dashboard</div>
+        <div class="empty-sub">Ve a la pestaña Archivos y sube los Excel</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: PROYECCION ══════════════════════════════ -->
+  <div class="view" id="view-proyeccion">
+    <div id="proyeccion-content">
+      <div class="empty-state"><div class="empty-icon">📈</div><div class="empty-title">Sin datos de proyección</div></div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: LIDERES ═════════════════════════════════ -->
+  <div class="view" id="view-lideres">
+    <div id="lideres-content">
+      <div class="empty-state"><div class="empty-icon">🏆</div><div class="empty-title">Sin datos de líderes</div></div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: ASESORES ════════════════════════════════ -->
+  <div class="view" id="view-asesores">
+    <div id="asesores-content">
+      <div class="empty-state"><div class="empty-icon">🧑‍💼</div><div class="empty-title">Sin datos de asesores</div></div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: ESTADÍSTICAS ════════════════════════════ -->
+  <div class="view" id="view-estadisticas">
+    <div id="estadisticas-content">
+      <div class="empty-state"><div class="empty-icon">📊</div><div class="empty-title">Sin datos estadísticos</div></div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ═══════════════════════════════════════════════════════════
+const STATE = {
+  raw: { cv_pf:[], cv_vu:[], abono_pf:[], abono_vu:[], metas_pf:[], metas_vu:[], lideres:[], proy_pf:{}, proy_vu:{}, comisiones:[] },
+  empresa: 'all',
+  lider: '',
+  asesor: '',
+  charts: {}
+};
+
+const FILE_KEYS = ['cv_pf','cv_vu','abono_pf','abono_vu','metas_pf','metas_vu','lideres','proy_pf','proy_vu','comisiones'];
+
+// ═══════════════════════════════════════════════════════════
+// STORAGE — IndexedDB (SharePoint compatible) + fallback
+// ═══════════════════════════════════════════════════════════
+const DB_NAME = 'CVD_Dashboard';
+const DB_STORE = 'files';
+const DB_VERSION = 1;
+let _db = null;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    if (_db) return resolve(_db);
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      e.target.result.createObjectStore(DB_STORE);
+    };
+    req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+function saveToStorage(key, data) {
+  const val = JSON.stringify(data);
+  // Intentar IndexedDB (funciona en SharePoint Online)
+  openDB().then(db => {
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).put(val, 'dash_' + key);
+  }).catch(() => {
+    // Fallback sessionStorage (no persiste al cerrar pestaña, pero funciona)
+    try { sessionStorage.setItem('dash_' + key, val); } catch(e) {
+      try { localStorage.setItem('dash_' + key, val); } catch(e2) {
+        console.warn('Storage no disponible:', e2);
+      }
+    }
+  });
+}
+
+function loadFromStorage(key) {
+  // Solo usado en initFromStorage — ahora asíncrono vía initFromStorage
+  // Fallback síncrono para sessionStorage/localStorage
+  try {
+    const d = sessionStorage.getItem('dash_' + key) || localStorage.getItem('dash_' + key);
+    return d ? JSON.parse(d) : null;
+  } catch(e) { return null; }
+}
+
+function initFromStorage() {
+  // Intentar cargar desde IndexedDB primero (async)
+  openDB().then(db => {
+    const tx = db.transaction(DB_STORE, 'readonly');
+    const store = tx.objectStore(DB_STORE);
+    let pendientes = FILE_KEYS.length;
+    FILE_KEYS.forEach(key => {
+      const req = store.get('dash_' + key);
+      req.onsuccess = () => {
+        if (req.result) {
+          try {
+            STATE.raw[key] = JSON.parse(req.result);
+            markLoaded(key, null);
+          } catch(e) {}
+        }
+        pendientes--;
+        if (pendientes === 0) {
+          populateFilters(); renderAll(); updateTimestamp();
+          const hasData = STATE.raw.cv_pf.length || STATE.raw.cv_vu.length;
+          if (hasData) {
+            const btn = document.querySelectorAll('.tab-btn')[0];
+            showTab('ejecutivo', btn);
+          }
+        }
+      };
+      req.onerror = () => {
+        pendientes--;
+        if (pendientes === 0) {
+          populateFilters(); renderAll(); updateTimestamp();
+          const hasData = STATE.raw.cv_pf.length || STATE.raw.cv_vu.length;
+          if (hasData) { const btn = document.querySelectorAll('.tab-btn')[0]; showTab('ejecutivo', btn); }
+        }
+      };
+    });
+  }).catch(() => {
+    // Fallback: cargar desde sessionStorage/localStorage síncronamente
+    FILE_KEYS.forEach(key => {
+      const d = loadFromStorage(key);
+      if (d) { STATE.raw[key] = d; markLoaded(key, null); }
+    });
+    populateFilters(); renderAll(); updateTimestamp();
+    const hasData = STATE.raw.cv_pf.length || STATE.raw.cv_vu.length;
+    if (hasData) { const btn = document.querySelectorAll('.tab-btn')[0]; showTab('ejecutivo', btn); }
+  });
+}
+
+function markLoaded(key, filename) {
+  const map = {
+    cv_pf:'uc-cv-pf', cv_vu:'uc-cv-vu',
+    abono_pf:'uc-abono-pf', abono_vu:'uc-abono-vu',
+    metas_pf:'uc-metas-pf', metas_vu:'uc-metas-vu',
+    lideres:'uc-lideres', proy_pf:'uc-proy-pf', proy_vu:'uc-proy-vu',
+    comisiones:'uc-comisiones'
+  };
+  const id = map[key];
+  if (!id) return;
+  const card = document.getElementById(id);
+  if (card) card.classList.add('loaded');
+  const st = document.getElementById(id + '-status');
+  if (st) {
+    const hora = new Date().toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'});
+    const nombre = filename ? filename.substring(0, 28) + (filename.length > 28 ? '…' : '') : '';
+    st.innerHTML = `✓ Cargado ${hora}${nombre ? '<br><span style="font-size:9px;color:#4B5563">'+nombre+'</span>' : ''}`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// CARGA DE ARCHIVOS
+// ═══════════════════════════════════════════════════════════
+function loadFile(event, key) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const filename = file.name;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    if (key === 'proy_pf' || key === 'proy_vu') {
+      parseProy(wb, key);
+    } else if (key === 'comisiones') {
+      parseComisiones(wb);
+    } else if (key === 'metas_pf' || key === 'metas_vu') {
+      parseMetas(sheet, key);
+    } else if (key === 'lideres') {
+      parseLideres(sheet);
+    } else {
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      STATE.raw[key] = rows;
+      saveToStorage(key, rows);
+    }
+    markLoaded(key, filename);
+    updateTimestamp();
+    populateFilters();
+    renderAll();
+  };
+  reader.readAsBinaryString(file);
+}
+
+// Porcentajes acumulados fijos por día (del archivo de distribución)
+const PCT_DIA = [
+  0, // índice 0 no usado
+  0.0370, 0.0707, 0.1038, 0.1319, 0.1593,
+  0.1734, 0.1995, 0.2121, 0.2524, 0.2886,
+  0.3192, 0.3711, 0.3966, 0.4133, 0.4467,
+  0.4617, 0.5098, 0.5387, 0.5735, 0.5901,
+  0.6122, 0.6508, 0.6759, 0.7050, 0.7485,
+  0.7883, 0.8029, 0.8327, 0.8765, 0.9449,
+  1.0000
+];
+
+function parseProy(wb, key) {
+  const sheetQ = wb.Sheets['Proyeccion Venta Diaria Q'];
+  const sheetM = wb.Sheets['Proyeccion venta diaria $'];
+
+  const parseSheet = (s) => {
+    if (!s) return null;
+    // Meta total está en B1
+    const b1 = s['B1'];
+    const meta = b1 ? (parseFloat(b1.v) || 0) : 0;
+    // Construir días con porcentajes fijos
+    const dias = PCT_DIA.slice(1).map((pct, i) => ({
+      dia: i + 1,
+      pct: pct,
+      metaAcum: Math.round(meta * pct)
+    }));
+    return { meta, dias };
+  };
+
+  STATE.raw[key] = {
+    q: parseSheet(sheetQ),
+    m: parseSheet(sheetM)
+  };
+  saveToStorage(key, STATE.raw[key]);
+}
+
+function parseComisiones(wb) {
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header:1 });
+  const com = [];
+  for (let i = 2; i < rows.length; i++) {
+    const r = rows[i];
+    if (r[0] && r[1] !== undefined && r[1] !== null && r[1] !== '') {
+      com.push({ plazo: r[0], pct: r[1], plazoAdicional: r[3]||'', pctAdicional: r[4]||0 });
+    }
+  }
+  STATE.raw.comisiones = com;
+  saveToStorage('comisiones', com);
+}
+
+function parseMetas(sheet, key) {
+  const rows = XLSX.utils.sheet_to_json(sheet, { header:1 });
+  const metas = [];
+  for (let i = 2; i < rows.length; i++) {
+    const r = rows[i];
+    if (r[0] && typeof r[0] === 'string' && !r[0].toLowerCase().includes('meta')) {
+      metas.push({ lider: normalName(r[0]), metaValor: r[1]||0, metaCantidad: r[2]||0 });
+    }
+  }
+  STATE.raw[key] = metas;
+  saveToStorage(key, metas);
+}
+
+function parseLideres(sheet) {
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+  STATE.raw.lideres = rows.map(r => ({ lider: normalName(r['Lider']||''), unidad: r['Unidad']||'', cargo: r['Cargo']||'' }));
+  saveToStorage('lideres', STATE.raw.lideres);
+}
+
+// ═══════════════════════════════════════════════════════════
+// UTILIDADES
+// ═══════════════════════════════════════════════════════════
+function primerNombreApellido(nombre) {
+  const partes = (nombre||'').toString().trim().replace(/\s+/g,' ').split(' ');
+  const resultado = partes.length >= 2 ? `${partes[0]} ${partes[1]}` : partes[0] || nombre;
+  return resultado.toUpperCase();
+}
+function normalName(s) {
+  return (s||'').toString().trim().toLowerCase().replace(/\s+/g,' ');
+}
+function fmt(n) {
+  if (n >= 1e9) return '$' + (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K';
+  return '$' + Math.round(n).toLocaleString('es-CL');
+}
+function fmtN(n) { return Math.round(n).toLocaleString('es-CL'); }
+function pct(num, den) { return den > 0 ? (num/den*100) : 0; }
+function semaforo(p) {
+  if (p >= 100) return { cls:'badge-green sem-green', label: p.toFixed(0)+'%', dot:'🟢' };
+  if (p >= 80)  return { cls:'badge-yellow sem-yellow', label: p.toFixed(0)+'%', dot:'🟡' };
+  return            { cls:'badge-red sem-red', label: p.toFixed(0)+'%', dot:'🔴' };
+}
+function semaforoCard(p) {
+  if (p >= 100) return 'green';
+  if (p >= 80)  return 'yellow';
+  return 'red';
+}
+function progressClass(p) {
+  if (p >= 100) return 'fill-green';
+  if (p >= 80)  return 'fill-yellow';
+  return 'fill-red';
+}
+function parseDate(val) {
+  if (!val) return null;
+  if (val instanceof Date) return val;
+  if (typeof val === 'string') {
+    // DD/MM/YYYY
+    const m1 = val.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m1) return new Date(+m1[3], +m1[2]-1, +m1[1]);
+    // ISO
+    return new Date(val);
+  }
+  return null;
+}
+function dateStr(d) {
+  if (!d) return '';
+  const dt = parseDate(d);
+  if (!dt || isNaN(dt)) return '';
+  return dt.toISOString().split('T')[0];
+}
+function calcAge(fechaNac) {
+  const d = parseDate(fechaNac);
+  if (!d || isNaN(d)) return null;
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+  return age;
+}
+function getComisionPct(cuotas, medioPago) {
+  const com = STATE.raw.comisiones;
+  if (!com || !com.length) return 0.09; // default
+  const c = parseInt(cuotas) || 0;
+  let base = 0;
+  if (c <= 1) base = com.find(x => x.plazo === 'Contado 30 dias')?.pct || 0.15;
+  else if (c <= 12) base = com.find(x => x.plazo === '2 a 12')?.pct || 0.11;
+  else if (c <= 36) base = com.find(x => x.plazo === '13 a 36')?.pct || 0.09;
+  else if (c <= 60) base = com.find(x => x.plazo === '37 a 60')?.pct || 0.08;
+  else base = com.find(x => x.plazo === '60 a mas')?.pct || 0.07;
+  const mp = (medioPago||'').toUpperCase();
+  if (mp === 'PAC' || mp === 'PAT') {
+    const add = com.find(x => normalName(x.plazoAdicional) === normalName(c<=1?'Contado 30 dias': c<=12?'2 a 12': c<=36?'13 a 36': c<=60?'37 a 60':'60 a mas'))?.pctAdicional || 0;
+    base += add;
+  }
+  return base;
+}
+// Tabla de equivalencias: apellido clave → nombre en archivo de metas
+// Garantiza match exacto sin ambigüedad
+const LIDER_ALIAS = [
+  { key: 'medel',     meta: 'camilo medel'     },
+  { key: 'hernandez', meta: 'viviana hernandez' },
+  { key: 'ferro',     meta: 'walter ferro'      },
+  { key: 'rojas',     meta: 'gabriela rojas'    },
+  { key: 'gonzalez',  meta: 'estefany gonzalez' },
+  { key: 'barberis',  meta: 'humberto barbiery' },
+  { key: 'barbiery',  meta: 'humberto barbiery' },
+  { key: 'sandoval',  meta: 'miguel sandoval'   },
+  { key: 'romero',    meta: 'nicolas romero'    },
+  { key: 'santana',   meta: 'rodolfo santana'   },
+];
+
+function resolverNombreMeta(nombreCV) {
+  const nc = normalName(nombreCV);
+  // 1. Match exacto contra nombre en metas
+  const alias = LIDER_ALIAS.find(a => nc.includes(a.key));
+  return alias ? alias.meta : nc;
+}
+
+// Retorna la meta SUMADA de un líder en las empresas visibles
+function getMetaLider(nombreCV) {
+  const nombreMeta = resolverNombreMeta(nombreCV);
+
+  const metasPF = (STATE.raw.metas_pf || []);
+  const metasVU = (STATE.raw.metas_vu || []);
+
+  const buscar = (lista) => lista.find(m => normalName(m.lider) === nombreMeta);
+
+  const mPF = buscar(metasPF);
+  const mVU = buscar(metasVU);
+
+  if (STATE.empresa === 'PF') {
+    return { metaCantidad: mPF?.metaCantidad||0, metaValor: mPF?.metaValor||0 };
+  }
+  if (STATE.empresa === 'VU') {
+    return { metaCantidad: mVU?.metaCantidad||0, metaValor: mVU?.metaValor||0 };
+  }
+  // "all" → suma PF + VU
+  return {
+    metaCantidad: (mPF?.metaCantidad||0) + (mVU?.metaCantidad||0),
+    metaValor:    (mPF?.metaValor||0)    + (mVU?.metaValor||0)
+  };
+}
+function matchMeta(metas, nombreCV) {
+  return getMetaLider(nombreCV);
+}
+function cleanPlan(plan) {
+  const p = (plan||'').toString().toUpperCase();
+  if (p.includes('RAICES DE VIDA') || p.includes('RAÍCES DE VIDA')) return 'RAICES DE VIDA';
+  if (p.includes('SEMILLAS DE LEGADO')) return 'SEMILLAS DE LEGADO';
+  if (p.includes('TESOROS DEL ALMA')) return 'TESOROS DEL ALMA';
+  return 'OTRO';
+}
+
+// ═══════════════════════════════════════════════════════════
+// FILTRADO DE DATOS
+// ═══════════════════════════════════════════════════════════
+function getCV() {
+  let rows = [...STATE.raw.cv_pf, ...STATE.raw.cv_vu];
+  if (STATE.empresa === 'PF') rows = STATE.raw.cv_pf;
+  if (STATE.empresa === 'VU') rows = STATE.raw.cv_vu;
+  rows = rows.filter(r => (r.ESTADO_CONTRATO||'').toString().toUpperCase().trim() !== 'INACTIVO');
+  if (STATE.lider) rows = rows.filter(r => normalName(r.LIDER||'') === normalName(STATE.lider));
+  if (STATE.asesor) rows = rows.filter(r => normalName(r.ASESOR||'') === normalName(STATE.asesor));
+  return rows;
+}
+function getAbono() {
+  let rows = [...STATE.raw.abono_pf, ...STATE.raw.abono_vu];
+  if (STATE.empresa === 'PF') rows = STATE.raw.abono_pf;
+  if (STATE.empresa === 'VU') rows = STATE.raw.abono_vu;
+  rows = rows.filter(r => (r.PIE_COMPLETO||'').toString().trim().toUpperCase() === 'ABONADO');
+  if (STATE.lider) rows = rows.filter(r => normalName(r.LIDER||'') === normalName(STATE.lider));
+  if (STATE.asesor) rows = rows.filter(r => normalName(r.ASESOR||'') === normalName(STATE.asesor));
+  return rows;
+}
+function getMetas() {
+  let metas = [];
+  if (STATE.empresa !== 'VU') metas = [...metas, ...STATE.raw.metas_pf.map(m => ({...m, emp:'PF'}))];
+  if (STATE.empresa !== 'PF') metas = [...metas, ...STATE.raw.metas_vu.map(m => ({...m, emp:'VU'}))];
+  return metas;
+}
+function getTotalMeta() {
+  const metasPF = (STATE.raw.metas_pf || []);
+  const metasVU = (STATE.raw.metas_vu || []);
+  if (STATE.empresa === 'PF') {
+    return { valor: metasPF.reduce((s,m)=>s+(m.metaValor||0),0), cantidad: metasPF.reduce((s,m)=>s+(m.metaCantidad||0),0) };
+  }
+  if (STATE.empresa === 'VU') {
+    return { valor: metasVU.reduce((s,m)=>s+(m.metaValor||0),0), cantidad: metasVU.reduce((s,m)=>s+(m.metaCantidad||0),0) };
+  }
+  // all → suma PF + VU
+  const todas = [...metasPF, ...metasVU];
+  return { valor: todas.reduce((s,m)=>s+(m.metaValor||0),0), cantidad: todas.reduce((s,m)=>s+(m.metaCantidad||0),0) };
+}
+
+// ═══════════════════════════════════════════════════════════
+// FILTROS UI
+// ═══════════════════════════════════════════════════════════
+function populateFilters() {
+  const allCV = [...STATE.raw.cv_pf, ...STATE.raw.cv_vu];
+  const lideres = [...new Set(allCV.map(r => r.LIDER||'').filter(Boolean))].sort();
+  const asesores = [...new Set(allCV.map(r => r.ASESOR||'').filter(Boolean))].sort();
+  
+  const fl = document.getElementById('f-lider');
+  const fa = document.getElementById('f-asesor');
+  fl.innerHTML = '<option value="">Todos</option>' + lideres.map(l => `<option value="${l}">${l}</option>`).join('');
+  fa.innerHTML = '<option value="">Todos</option>' + asesores.map(a => `<option value="${a}">${a}</option>`).join('');
+}
+function applyFilters() {
+  STATE.lider  = document.getElementById('f-lider').value;
+  STATE.asesor = document.getElementById('f-asesor').value;
+  renderAll();
+}
+function resetFilters() {
+  document.getElementById('f-lider').value = '';
+  document.getElementById('f-asesor').value = '';
+  STATE.lider = STATE.asesor = '';
+  renderAll();
+}
+function setCompany(co) {
+  STATE.empresa = co;
+  document.getElementById('btn-all').className = 'co-btn' + (co === 'all' ? ' active-all' : '');
+  document.getElementById('btn-pf').className  = 'co-btn' + (co === 'PF'  ? ' active-pf'  : '');
+  document.getElementById('btn-vu').className  = 'co-btn' + (co === 'VU'  ? ' active-vu'  : '');
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════════════
+let currentTab = 'archivos';
+function showTab(name, btn) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  if (btn) btn.classList.add('active');
+  currentTab = name;
+  // Re-render solo la vista activa para no perder el estado de empresa
+  if (name === 'ejecutivo') renderEjecutivo();
+  else if (name === 'proyeccion') renderProyeccion();
+  else if (name === 'lideres') renderLideres();
+  else if (name === 'asesores') renderAsesores();
+  else if (name === 'estadisticas') renderEstadisticas();
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER ALL
+// ═══════════════════════════════════════════════════════════
+function renderAll() {
+  renderEjecutivo();
+  renderProyeccion();
+  renderLideres();
+  renderAsesores();
+  renderEstadisticas();
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER EJECUTIVO
+// ═══════════════════════════════════════════════════════════
+function renderEjecutivo() {
+  const cv = getCV();
+  const meta = getTotalMeta();
+  const abono = getAbono();
+  
+  if (!cv.length && !meta.valor) {
+    document.getElementById('ejecutivo-content').innerHTML = `
+      <div class="empty-state"><div class="empty-icon">📂</div>
+      <div class="empty-title">Carga los archivos para ver el dashboard</div>
+      <div class="empty-sub">Ve a la pestaña Archivos y sube los Excel</div></div>`;
+    return;
+  }
+
+  // KPIs base
+  const totalContratos = cv.length;
+  const totalComisionable = cv.reduce((s,r) => s + (parseFloat(r.VALOR_COMISIONABLE)||0), 0);
+  const asesoresVendiendo = new Set(cv.filter(r => r.ASESOR).map(r => r.ASESOR)).size;
+  const precioPromedio = totalContratos > 0 ? totalComisionable / totalContratos : 0;
+  
+  // Cuotas promedio
+  const cuotasAll = cv.map(r => parseInt(r.CANTIDAD_CUOTAS)||0);
+  const cuotasPromedio = cuotasAll.length ? Math.round(cuotasAll.reduce((s,v)=>s+v,0)/cuotasAll.length) : 0;
+  const cuotasMas2 = cuotasAll.filter(c => c > 2);
+  const cuotasPromReal = cuotasMas2.length ? Math.round(cuotasMas2.reduce((s,v)=>s+v,0)/cuotasMas2.length) : 0;
+  
+  // Pie
+  const totalPie = cv.reduce((s,r) => s + (parseFloat(r.PIE)||0), 0);
+  const IVA = 1.19;
+  const piePcts = cv.map(r => {
+    const pie = parseFloat(r.PIE)||0;
+    const vc  = parseFloat(r.VALOR_COMISIONABLE)||0;
+    return vc > 0 ? (pie/IVA)/vc : 0;
+  }).filter(v => v > 0);
+  const piePctProm = piePcts.length ? piePcts.reduce((s,v)=>s+v,0)/piePcts.length : 0;
+
+  // Cumplimiento
+  const pctContratos = pct(totalContratos, meta.cantidad);
+  const pctValor = pct(totalComisionable, meta.valor);
+
+  // Proyección (simple: ritmo actual)
+  const hoy = new Date();
+  const diasMes = new Date(hoy.getFullYear(), hoy.getMonth()+1, 0).getDate();
+  const diaActual = hoy.getDate();
+  const proyContratos = diaActual > 0 ? Math.round(totalContratos * diasMes / diaActual) : 0;
+  const proyValor = diaActual > 0 ? totalComisionable * diasMes / diaActual : 0;
+
+  // Abonados
+  const totalAbonados = abono.length;
+  const valorAbonado = abono.reduce((s,r) => s + (parseFloat(r.PRECIO_VENTA)||parseFloat(r.VALOR_COMISIONABLE)||0), 0);
+
+  const semC = semaforo(pctContratos);
+  const semV = semaforo(pctValor);
+
+  document.getElementById('ejecutivo-content').innerHTML = `
+    <div class="section-title">KPIs Principales</div>
+    <div class="kpi-grid">
+      <div class="kpi-card ${semaforoCard(pctContratos)}">
+        <div class="kpi-label tooltip" data-tip="Contratos totales del período">Contratos Vendidos</div>
+        <div class="kpi-value">${totalContratos}</div>
+        <div class="kpi-sub">Meta: ${meta.cantidad}</div>
+        <span class="kpi-badge ${semC.cls}">${semC.dot} ${semC.label}</span>
+        <div class="progress-wrap"><div class="progress-bar-bg"><div class="progress-bar-fill ${progressClass(pctContratos)}" style="width:${Math.min(pctContratos,100)}%"></div></div></div>
+      </div>
+      <div class="kpi-card ${semaforoCard(pctValor)}">
+        <div class="kpi-label tooltip" data-tip="Suma VALOR_COMISIONABLE">Valor Comisionable</div>
+        <div class="kpi-value sm">${fmt(totalComisionable)}</div>
+        <div class="kpi-sub">Meta: ${fmt(meta.valor)}</div>
+        <span class="kpi-badge ${semV.cls}">${semV.dot} ${semV.label}</span>
+        <div class="progress-wrap"><div class="progress-bar-bg"><div class="progress-bar-fill ${progressClass(pctValor)}" style="width:${Math.min(pctValor,100)}%"></div></div></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Asesores Vendiendo</div>
+        <div class="kpi-value">${asesoresVendiendo}</div>
+        <div class="kpi-sub">Con al menos 1 venta</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label tooltip" data-tip="Valor Comisionable / N° Contratos">Precio Promedio</div>
+        <div class="kpi-value sm">${fmt(precioPromedio)}</div>
+        <div class="kpi-sub">Por contrato</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Proyección Contratos</div>
+        <div class="kpi-value">${proyContratos}</div>
+        <div class="kpi-sub">Al cierre del mes</div>
+        <span class="kpi-badge ${semaforo(pct(proyContratos,meta.cantidad)).cls}">${semaforo(pct(proyContratos,meta.cantidad)).dot} ${semaforo(pct(proyContratos,meta.cantidad)).label} meta</span>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Proyección Valor</div>
+        <div class="kpi-value sm">${fmt(proyValor)}</div>
+        <div class="kpi-sub">Al cierre del mes</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label tooltip" data-tip="Promedio CANTIDAD_CUOTAS">Cuotas Promedio</div>
+        <div class="kpi-value">${cuotasPromedio}</div>
+        <div class="kpi-sub">Todos los contratos</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label tooltip" data-tip="Solo contratos con más de 2 cuotas">Cuota Real (>2)</div>
+        <div class="kpi-value">${cuotasPromReal}</div>
+        <div class="kpi-sub">Contratos diferidos</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Total Pie del Mes</div>
+        <div class="kpi-value sm">${fmt(totalPie)}</div>
+        <div class="kpi-sub">% Pie promedio: ${(piePctProm*100).toFixed(1)}%</div>
+      </div>
+    </div>
+
+    <div class="section-title">Abonados del Mes</div>
+    <div class="kpi-grid">
+      <div class="kpi-card green">
+        <div class="kpi-label">Ventas Abonadas</div>
+        <div class="kpi-value">${totalAbonados}</div>
+        <div class="kpi-sub">PIE_COMPLETO = ABONADO</div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-label">Valor Abonado</div>
+        <div class="kpi-value sm">${fmt(valorAbonado)}</div>
+        <div class="kpi-sub">Precio venta abonados</div>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">Cumplimiento Contratos vs Meta</div>
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">
+            <span>Vendido: <strong style="color:var(--text)">${totalContratos}</strong></span>
+            <span>Meta: <strong style="color:var(--text)">${meta.cantidad}</strong></span>
+          </div>
+          <div style="background:var(--surface2);border-radius:6px;height:28px;overflow:hidden;position:relative">
+            <div style="height:100%;width:${Math.min(pctContratos,100)}%;background:${pctContratos>=100?'var(--green)':pctContratos>=80?'#F59E0B':'var(--red)'};border-radius:6px;transition:width .6s ease;display:flex;align-items:center;padding-left:10px">
+              <span style="font-size:12px;font-weight:700;color:#fff">${pctContratos.toFixed(1)}%</span>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-top:4px">
+            <span>0</span><span style="color:${pctContratos>=100?'var(--green)':'var(--text3)'}">100%</span>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Proyección al Cierre</div>
+          <div style="background:var(--surface2);border-radius:6px;height:18px;overflow:hidden;position:relative">
+            <div style="height:100%;width:${Math.min(pct(proyContratos,meta.cantidad),100)}%;background:${pct(proyContratos,meta.cantidad)>=100?'#16A34A44':pct(proyContratos,meta.cantidad)>=80?'#F59E0B44':'#DC262644'};border:none;border-radius:6px;transition:width .6s ease"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;margin-top:3px">
+            <span style="color:var(--text2)">Proyección: <strong>${proyContratos}</strong></span>
+            <span style="color:${pct(proyContratos,meta.cantidad)>=100?'var(--green)':pct(proyContratos,meta.cantidad)>=80?'#F59E0B':'var(--red)'}"><strong>${pct(proyContratos,meta.cantidad).toFixed(1)}%</strong> de meta</span>
+          </div>
+        </div>
+        <div class="chart-wrap" style="height:160px;margin-top:12px"><canvas id="ch-cumpl-contratos"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Cumplimiento Valor vs Meta</div>
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">
+            <span>Vendido: <strong style="color:var(--text)">${fmt(totalComisionable)}</strong></span>
+            <span>Meta: <strong style="color:var(--text)">${fmt(meta.valor)}</strong></span>
+          </div>
+          <div style="background:var(--surface2);border-radius:6px;height:28px;overflow:hidden;position:relative">
+            <div style="height:100%;width:${Math.min(pctValor,100)}%;background:${pctValor>=100?'var(--green)':pctValor>=80?'#F59E0B':'var(--red)'};border-radius:6px;transition:width .6s ease;display:flex;align-items:center;padding-left:10px">
+              <span style="font-size:12px;font-weight:700;color:#fff">${pctValor.toFixed(1)}%</span>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-top:4px">
+            <span>0</span><span style="color:${pctValor>=100?'var(--green)':'var(--text3)'}">100%</span>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Proyección al Cierre</div>
+          <div style="background:var(--surface2);border-radius:6px;height:18px;overflow:hidden;position:relative">
+            <div style="height:100%;width:${Math.min(pct(proyValor,meta.valor),100)}%;background:${pct(proyValor,meta.valor)>=100?'#16A34A44':pct(proyValor,meta.valor)>=80?'#F59E0B44':'#DC262644'};border-radius:6px;transition:width .6s ease"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;margin-top:3px">
+            <span style="color:var(--text2)">Proyección: <strong>${fmt(proyValor)}</strong></span>
+            <span style="color:${pct(proyValor,meta.valor)>=100?'var(--green)':pct(proyValor,meta.valor)>=80?'#F59E0B':'var(--red)'}"><strong>${pct(proyValor,meta.valor).toFixed(1)}%</strong> de meta</span>
+          </div>
+        </div>
+        <div class="chart-wrap" style="height:160px;margin-top:12px"><canvas id="ch-cumpl-valor"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Ventas por Empresa</div>
+        <div class="chart-wrap"><canvas id="ch-empresa"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Ventas por Día</div>
+        <div class="chart-wrap"><canvas id="ch-por-dia"></canvas></div>
+      </div>
+    </div>
+
+    ${renderTopRankings(cv)}
+  `;
+
+  // Gráficos
+  setTimeout(() => {
+    destroyChart('ch-cumpl-contratos');
+    destroyChart('ch-cumpl-valor');
+    destroyChart('ch-empresa');
+    destroyChart('ch-por-dia');
+
+    // Cumplimiento contratos — 3 barras: Vendido / Meta / Proyección
+    STATE.charts['ch-cumpl-contratos'] = new Chart(document.getElementById('ch-cumpl-contratos'), {
+      type: 'bar',
+      data: {
+        labels: ['Vendido', 'Meta', 'Proyección'],
+        datasets: [{
+          data: [totalContratos, meta.cantidad, proyContratos],
+          backgroundColor: [
+            pctContratos >= 100 ? '#16A34A' : pctContratos >= 80 ? '#F59E0B' : '#2563EB',
+            '#E4E7EC',
+            pct(proyContratos,meta.cantidad) >= 100 ? '#16A34A66' : pct(proyContratos,meta.cantidad) >= 80 ? '#F59E0B66' : '#DC262666'
+          ],
+          borderRadius: 6,
+          borderSkipped: false
+        }]
+      },
+      options: {
+        ...barOpts(),
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.raw} contratos` } }
+        },
+        animation: {
+          onComplete: function() {
+            const chart = this; const ctx2 = chart.ctx;
+            ctx2.save(); ctx2.font = 'bold 11px DM Sans,sans-serif';
+            ctx2.fillStyle = '#4B5563'; ctx2.textAlign = 'center'; ctx2.textBaseline = 'bottom';
+            chart.data.datasets[0].data.forEach((val, i) => {
+              const bar = chart.getDatasetMeta(0).data[i];
+              ctx2.fillText(val, bar.x, bar.y - 4);
+            });
+            ctx2.restore();
+          }
+        }
+      }
+    });
+
+    // Cumplimiento valor — 3 barras: Vendido / Meta / Proyección
+    STATE.charts['ch-cumpl-valor'] = new Chart(document.getElementById('ch-cumpl-valor'), {
+      type: 'bar',
+      data: {
+        labels: ['Vendido', 'Meta', 'Proyección'],
+        datasets: [{
+          data: [totalComisionable/1e6, meta.valor/1e6, proyValor/1e6],
+          backgroundColor: [
+            pctValor >= 100 ? '#16A34A' : pctValor >= 80 ? '#F59E0B' : '#2563EB',
+            '#E4E7EC',
+            pct(proyValor,meta.valor) >= 100 ? '#16A34A66' : pct(proyValor,meta.valor) >= 80 ? '#F59E0B66' : '#DC262666'
+          ],
+          borderRadius: 6,
+          borderSkipped: false
+        }]
+      },
+      options: {
+        ...barOpts(),
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ' $' + ctx.raw.toFixed(1) + 'M' } }
+        },
+        animation: {
+          onComplete: function() {
+            const chart = this; const ctx2 = chart.ctx;
+            ctx2.save(); ctx2.font = 'bold 10px DM Sans,sans-serif';
+            ctx2.fillStyle = '#4B5563'; ctx2.textAlign = 'center'; ctx2.textBaseline = 'bottom';
+            chart.data.datasets[0].data.forEach((val, i) => {
+              const bar = chart.getDatasetMeta(0).data[i];
+              ctx2.fillText('$' + val.toFixed(1) + 'M', bar.x, bar.y - 4);
+            });
+            ctx2.restore();
+          }
+        }
+      }
+    });
+
+    // Por empresa — verde oscuro PF, verde claro VU, con porcentajes
+    const pfCount = STATE.raw.cv_pf.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO').length;
+    const vuCount = STATE.raw.cv_vu.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO').length;
+    const totalEmp = pfCount + vuCount;
+    STATE.charts['ch-empresa'] = new Chart(document.getElementById('ch-empresa'), {
+      type: 'doughnut',
+      data: {
+        labels: [
+          `Protección Familiar (${totalEmp>0?(pfCount/totalEmp*100).toFixed(1):0}%)`,
+          `Valles Unidos (${totalEmp>0?(vuCount/totalEmp*100).toFixed(1):0}%)`
+        ],
+        datasets: [{
+          data: [pfCount, vuCount],
+          backgroundColor: ['#14532D', '#86EFAC'],
+          borderWidth: 3,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position:'bottom', labels:{ font:{size:11}, padding:14, boxWidth:14 } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.raw} contratos — ${totalEmp>0?(ctx.raw/totalEmp*100).toFixed(1):0}%` } }
+        }
+      }
+    });
+
+    // Por día — barra apilada: PF verde oscuro + VU verde claro, total encima
+    const byDayPF = {};
+    const byDayVU = {};
+    STATE.raw.cv_pf.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO').forEach(r => {
+      const d = parseDate(r.FECHA_CONTRATO_F);
+      if (d && !isNaN(d)) { const dia = d.getDate(); byDayPF[dia] = (byDayPF[dia]||0) + 1; }
+    });
+    STATE.raw.cv_vu.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO').forEach(r => {
+      const d = parseDate(r.FECHA_CONTRATO_F);
+      if (d && !isNaN(d)) { const dia = d.getDate(); byDayVU[dia] = (byDayVU[dia]||0) + 1; }
+    });
+    const allDays = [...new Set([...Object.keys(byDayPF), ...Object.keys(byDayVU)].map(Number))].sort((a,b)=>a-b);
+    STATE.charts['ch-por-dia'] = new Chart(document.getElementById('ch-por-dia'), {
+      type: 'bar',
+      data: {
+        labels: allDays.map(d => 'D'+d),
+        datasets: [
+          {
+            label: 'Protección Familiar',
+            data: allDays.map(d => byDayPF[d]||0),
+            backgroundColor: '#14532D',
+            borderRadius: 0,
+            borderSkipped: false,
+            stack: 'ventas'
+          },
+          {
+            label: 'Valles Unidos',
+            data: allDays.map(d => byDayVU[d]||0),
+            backgroundColor: '#86EFAC',
+            borderRadius: 5,
+            borderSkipped: false,
+            stack: 'ventas'
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position:'bottom', labels:{ font:{size:10}, padding:12, boxWidth:12 } },
+          tooltip: {
+            callbacks: {
+              footer: items => {
+                const total = items.reduce((s,i) => s + i.raw, 0);
+                return `Total: ${total} contratos`;
+              },
+              label: ctx => ` ${ctx.dataset.label}: ${ctx.raw}`
+            }
+          }
+        },
+        scales: {
+          x: { stacked: true, grid:{display:false}, ticks:{font:{size:9}} },
+          y: { stacked: true, ticks:{font:{size:9}} }
+        },
+        animation: {
+          onComplete: function() {
+            const chart = this; const ctx2 = chart.ctx;
+            ctx2.save();
+            ctx2.font = 'bold 10px DM Sans,sans-serif';
+            ctx2.fillStyle = '#14532D';
+            ctx2.textAlign = 'center';
+            ctx2.textBaseline = 'bottom';
+            allDays.forEach((dia, i) => {
+              const total = (byDayPF[dia]||0) + (byDayVU[dia]||0);
+              if (total === 0) return;
+              // Obtener posición top de la barra apilada (último dataset)
+              const meta1 = chart.getDatasetMeta(0).data[i];
+              const meta2 = chart.getDatasetMeta(1).data[i];
+              const topY = Math.min(meta1.y, meta2.y);
+              ctx2.fillText(total, meta1.x, topY - 3);
+            });
+            ctx2.restore();
+          }
+        }
+      }
+    });
+  }, 0);
+}
+
+function renderTopRankings(cv) {
+  // Por líder
+  const byLider = {};
+  cv.forEach(r => {
+    const l = (r.LIDER||'').trim();
+    if (!l) return;
+    if (!byLider[l]) byLider[l] = { contratos:0, valor:0 };
+    byLider[l].contratos++;
+    byLider[l].valor += parseFloat(r.VALOR_COMISIONABLE)||0;
+  });
+  const topLideres = Object.entries(byLider).sort((a,b) => b[1].contratos - a[1].contratos).slice(0,3);
+
+  // ── CUB DE LOS 5 +1 ─────────────────────────────────────
+  // Agrupar asesores por valor comisionable e identificar su líder
+  const byAsesor = {};
+  cv.forEach(r => {
+    const a = (r.ASESOR||'').trim();
+    const l = (r.LIDER||'').trim();
+    if (!a) return;
+    if (!byAsesor[a]) byAsesor[a] = { contratos:0, valor:0, lider:l };
+    byAsesor[a].contratos++;
+    byAsesor[a].valor += parseFloat(r.VALOR_COMISIONABLE)||0;
+  });
+
+  // Detectar si un asesor pertenece al equipo de Walter Ferro
+  const esWalter = (lider) => normalName(lider).includes('ferro') || normalName(lider).includes('walter');
+  const EXCLUIR_CUB = ['andrea concha adasme'];
+  const excluida = (nombre) => EXCLUIR_CUB.includes(normalName(nombre));
+
+  // +1: mejor asesor de Walter con mínimo $16.000.000, ordenado por valor
+  const asesoresWalter = Object.entries(byAsesor)
+    .filter(([nombre, d]) => esWalter(d.lider) && d.valor >= 16000000 && !excluida(nombre))
+    .sort((a, b) => b[1].valor - a[1].valor);
+  const plusUno = asesoresWalter.length ? [asesoresWalter[0]] : [];
+
+  // Top 5: asesores de otros equipos con mínimo $9.000.000, ordenados por valor
+  const top5 = Object.entries(byAsesor)
+    .filter(([nombre, d]) => !esWalter(d.lider) && d.valor >= 9000000 && !excluida(nombre))
+    .sort((a, b) => b[1].valor - a[1].valor)
+    .slice(0, 5);
+
+  // Combinar: primero +1 de Walter, luego los 5, reordenar todo por valor
+  const cubFinal = [...plusUno, ...top5].sort((a, b) => b[1].valor - a[1].valor);
+
+  const posClass = ['pos-1','pos-2','pos-3'];
+  const medals = ['🥇','🥈','🥉'];
+
+  return `
+    <div class="section-title">Rankings</div>
+    <div class="ranking-grid">
+      <div class="ranking-card">
+        <div class="ranking-title">🏆 Top Líderes — Contratos</div>
+        ${topLideres.map(([nombre, data], i) => {
+          const mLider = getMetaLider(nombre);
+          const mCant = mLider?.metaCantidad || 0;
+          const p = pct(data.contratos, mCant);
+          const sem = semaforo(p);
+          return `
+          <div class="ranking-item">
+            <div class="rank-pos ${posClass[i]||'pos-3'}">${medals[i]||i+1}</div>
+            <div class="rank-info">
+              <div class="rank-name">${nombre}</div>
+              <div class="rank-sub">${fmt(data.valor)}</div>
+              ${mCant > 0 ? `<div class="progress-wrap"><div class="progress-bar-bg"><div class="progress-bar-fill ${progressClass(p)}" style="width:${Math.min(p,100)}%"></div></div></div>` : ''}
+            </div>
+            <div class="rank-val">
+              <div class="rank-main">${data.contratos}</div>
+              ${mCant > 0 ? `<span class="kpi-badge ${sem.cls}">${sem.label}</span>` : ''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="ranking-card">
+        <div class="ranking-title">⭐ CUB DE LOS 5 +1</div>
+        ${cubFinal.length === 0 ? `<div style="padding:16px;font-size:12px;color:var(--text3)">Sin asesores que cumplan la meta mínima</div>` : ''}
+        ${cubFinal.map(([nombre, data], i) => {
+          const esDeWalter = esWalter(data.lider);
+          return `
+          <div class="ranking-item">
+            <div class="rank-pos ${posClass[i]||'pos-3'}">${medals[i]||i+1}</div>
+            <div class="rank-info">
+              <div class="rank-name">${nombre}</div>
+              <div class="rank-sub" style="display:flex;gap:6px;align-items:center">
+                <span>${data.contratos} contratos</span>
+                ${esDeWalter ? `<span style="background:#FEF08A;color:#854D0E;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px">WALTER</span>` : ''}
+              </div>
+            </div>
+            <div class="rank-val">
+              <div class="rank-main" style="color:var(--green)">${fmt(data.valor)}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER PROYECCIÓN
+// ═══════════════════════════════════════════════════════════
+function renderProyeccion() {
+  const pfProy = STATE.raw.proy_pf;
+  const vuProy = STATE.raw.proy_vu;
+  const hasProy = pfProy?.q?.meta || pfProy?.m?.meta || vuProy?.q?.meta || vuProy?.m?.meta;
+
+  if (!hasProy) {
+    document.getElementById('proyeccion-content').innerHTML = `
+      <div class="empty-state"><div class="empty-icon">📈</div>
+      <div class="empty-title">Carga los archivos de proyección</div></div>`;
+    return;
+  }
+
+  // ── Ventas reales acumuladas por día desde CV ────────────
+  const buildVentasDia = (cvRows, esValor) => {
+    const ventaDia = {};
+    cvRows.forEach(r => {
+      const d = parseDate(r.FECHA_CONTRATO_F);
+      if (!d || isNaN(d)) return;
+      const dia = d.getDate();
+      const val = esValor ? (parseFloat(r.VALOR_COMISIONABLE)||0) : 1;
+      ventaDia[dia] = (ventaDia[dia]||0) + val;
+    });
+    return ventaDia;
+  };
+
+  // ── Abonadas acumuladas por día desde archivo Abono ──────
+  // FECHA_CONTRATO viene vacía → usar MIN_FECHA_SALDO como referencia de día
+  // Solo registros con PIE_COMPLETO === 'ABONADO' (exacto, mayúsculas)
+  const buildAbonadasDia = (abonoRows, esValor) => {
+    const abonoDia = {};
+    abonoRows.forEach(r => {
+      if ((r.PIE_COMPLETO||'').toString().trim().toUpperCase() !== 'ABONADO') return;
+      // MIN_FECHA_SALDO es la fecha con dato — ej: "2026-03-17T00:00:00"
+      const fechaRaw = r.MIN_FECHA_SALDO || r.FECHA_CONTRATO || '';
+      const d = parseDate(fechaRaw);
+      if (!d || isNaN(d)) return;
+      const dia = d.getDate();
+      const val = esValor ? (parseFloat(r.PRECIO_VENTA)||0) : 1;
+      abonoDia[dia] = (abonoDia[dia]||0) + val;
+    });
+    return abonoDia;
+  };
+
+  const hoy = new Date().getDate();
+  const showPF = STATE.empresa !== 'VU';
+  const showVU = STATE.empresa !== 'PF';
+
+  // ── Función de render de un bloque ──────────────────────
+  const renderBloque = (proyData, ventaDia, abonoDia, label, idSuffix, esValor) => {
+    if (!proyData || !proyData.meta) return '';
+
+    const meta = proyData.meta;
+    const dias = proyData.dias;
+
+    // Acumulado real día a día
+    let acum = 0;
+    const realAcumPorDia = {};
+    for (let d = 1; d <= 31; d++) {
+      acum += (ventaDia[d]||0);
+      realAcumPorDia[d] = acum;
+    }
+
+    // Acumulado abonadas día a día
+    let acumAb = 0;
+    const abonadoAcumPorDia = {};
+    for (let d = 1; d <= 31; d++) {
+      acumAb += (abonoDia[d]||0);
+      abonadoAcumPorDia[d] = acumAb;
+    }
+
+    const realHoy     = realAcumPorDia[hoy] || 0;
+    const abonHoy     = abonadoAcumPorDia[hoy] || 0;
+    const metaHoy     = Math.round(meta * (PCT_DIA[hoy] || 1));
+    const diff        = realHoy - metaHoy;
+    const diffMenAbon = diff + abonHoy;
+    const proyFinal   = hoy > 0 && PCT_DIA[hoy] > 0 ? realHoy / PCT_DIA[hoy] : 0;
+    const pctAvance   = meta > 0 ? (realHoy / meta * 100) : 0;
+    const semH        = semaforo(pctAvance);
+
+    const fmtVal = v => esValor ? fmt(v) : fmtN(Math.round(v));
+
+    return `
+      <div class="chart-card" style="grid-column: span 2">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+          <div class="chart-title" style="margin-bottom:0">${label}</div>
+          <span class="kpi-badge ${semH.cls}">${semH.dot} ${semH.label} de meta</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:16px">
+          <div>
+            <div class="kpi-label">Meta Total Mes</div>
+            <div style="font-size:18px;font-weight:700;font-family:var(--mono)">${fmtVal(meta)}</div>
+          </div>
+          <div>
+            <div class="kpi-label">Meta Acum. Día ${hoy}</div>
+            <div style="font-size:18px;font-weight:700;font-family:var(--mono)">${fmtVal(metaHoy)}</div>
+          </div>
+          <div>
+            <div class="kpi-label">Venta Real Acum.</div>
+            <div style="font-size:18px;font-weight:700;color:var(--accent);font-family:var(--mono)">${fmtVal(realHoy)}</div>
+          </div>
+          <div>
+            <div class="kpi-label">Abonadas Acum.</div>
+            <div style="font-size:18px;font-weight:700;color:var(--green);font-family:var(--mono)">${fmtVal(abonHoy)}</div>
+          </div>
+          <div>
+            <div class="kpi-label">Diferencia</div>
+            <div style="font-size:18px;font-weight:700;font-family:var(--mono);color:${diff>=0?'var(--green)':'var(--red)'}">${diff>=0?'+':''}${fmtVal(diff)}</div>
+          </div>
+          <div>
+            <div class="kpi-label">Dif. menos Abonadas</div>
+            <div style="font-size:18px;font-weight:700;font-family:var(--mono);color:${diffMenAbon>=0?'var(--green)':'var(--red)'}">${diffMenAbon>=0?'+':''}${fmtVal(diffMenAbon)}</div>
+          </div>
+          <div>
+            <div class="kpi-label">Proyección al Cierre</div>
+            <div style="font-size:18px;font-weight:700;color:var(--green);font-family:var(--mono)">${fmtVal(proyFinal)}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px">${meta>0?((proyFinal/meta)*100).toFixed(1)+'% de meta':''}</div>
+          </div>
+        </div>
+        <div class="chart-wrap" style="height:260px"><canvas id="ch-proy-${idSuffix}"></canvas></div>
+      </div>
+
+      <div class="table-card" style="grid-column: span 2">
+        <div class="table-header">
+          <span class="table-header-title">Detalle Diario — ${label}</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Día</th>
+              <th class="num">Meta Acum.</th>
+              <th class="num">Venta Real Acum.</th>
+              <th class="num">Abonadas Acum.</th>
+              <th class="num">Diferencia</th>
+              <th class="num">Dif. menos Abonadas</th>
+              <th class="num">Proyección Cierre</th>
+            </tr></thead>
+            <tbody>
+              ${dias.map(d => {
+                const ventaDiaVal   = ventaDia[d.dia] || 0;
+                const realAcum      = d.dia <= hoy ? realAcumPorDia[d.dia]    : null;
+                const abonadoAcum   = d.dia <= hoy ? abonadoAcumPorDia[d.dia] : null;
+                const mAcum         = d.metaAcum;
+                const dif           = realAcum    !== null ? realAcum - mAcum  : null;
+                const difMenAb      = dif         !== null ? dif + (abonadoAcum||0) : null;
+                const difCls        = dif    === null ? '' : dif    > 0 ? 'diff-pos' : dif    < 0 ? 'diff-neg' : 'diff-zero';
+                const difMenAbCls   = difMenAb === null ? '' : difMenAb > 0 ? 'diff-pos' : difMenAb < 0 ? 'diff-neg' : 'diff-zero';
+                const proy          = d.dia <= hoy && PCT_DIA[d.dia] > 0 ? realAcum / PCT_DIA[d.dia] : null;
+                const isHoy         = d.dia === hoy;
+                return `<tr style="${isHoy?'background:#EFF6FF;font-weight:600':''}">
+                  <td>${d.dia}${isHoy?' ◀':''}</td>
+                  <td class="num">${fmtVal(mAcum)}</td>
+                  <td class="num">${realAcum    !== null ? fmtVal(realAcum)    : '—'}</td>
+                  <td class="num" style="color:var(--green)">${abonadoAcum !== null ? fmtVal(abonadoAcum) : '—'}</td>
+                  <td class="num ${difCls}">${dif      !== null ? (dif>0?'+':'')+fmtVal(dif) : '—'}</td>
+                  <td class="num ${difMenAbCls}">${difMenAb !== null ? (difMenAb>0?'+':'')+fmtVal(difMenAb) : '—'}</td>
+                  <td class="num" style="color:var(--green)">${proy !== null ? fmtVal(proy) : '—'}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  };
+
+  // ── Construir HTML ───────────────────────────────────────
+  let html = '';
+
+  // Si hay líder seleccionado, calcular meta del líder y usar CV filtrado
+  const liderActivo = STATE.lider;
+
+  const getProyDataConMeta = (proyDataBase, metaLider) => {
+    if (!proyDataBase) return null;
+    // Reconstruir dias con metaAcum basado en la meta del líder
+    const diasConMeta = proyDataBase.dias.map(d => ({
+      ...d,
+      metaAcum: Math.round(metaLider * d.pct)
+    }));
+    return { meta: metaLider, dias: diasConMeta };
+  };
+
+  const getAbonoPorLider = (abonoRows, lider) => {
+    if (!lider) return abonoRows;
+    return abonoRows.filter(r => normalName(r.LIDER||'') === normalName(lider));
+  };
+
+  if (liderActivo) {
+    // ── VISTA CON LÍDER SELECCIONADO ───────────────────────
+    const metaLider = getMetaLider(liderActivo);
+    const cvFiltrado = getCV(); // ya viene filtrado por líder y empresa
+
+    // Separar cv filtrado por empresa para determinar qué mostrar
+    const cvPFLider = cvFiltrado.filter(r => (r.EMPRESA||'').toString().toUpperCase().includes('PROTECCION') || (r.EMPRESA||'').toString().toUpperCase().includes('FAMILIAR'));
+    const cvVULider = cvFiltrado.filter(r => (r.EMPRESA||'').toString().toUpperCase().includes('VALLES'));
+
+    const labelLider = liderActivo.toUpperCase();
+
+    if (showPF && (cvPFLider.length > 0 || STATE.empresa === 'PF')) {
+      const metaPF = STATE.empresa === 'all'
+        ? (STATE.raw.metas_pf.find(m => normalName(m.lider) === resolverNombreMeta(liderActivo))?.metaValor || 0)
+        : metaLider.metaValor;
+      const metaPFQ = STATE.empresa === 'all'
+        ? (STATE.raw.metas_pf.find(m => normalName(m.lider) === resolverNombreMeta(liderActivo))?.metaCantidad || 0)
+        : metaLider.metaCantidad;
+
+      const vQ  = buildVentasDia(cvPFLider, false);
+      const vM  = buildVentasDia(cvPFLider, true);
+      const abQ = buildAbonadasDia(getAbonoPorLider(STATE.raw.abono_pf, liderActivo), false);
+      const abM = buildAbonadasDia(getAbonoPorLider(STATE.raw.abono_pf, liderActivo), true);
+      const pQcust = pfProy?.q ? getProyDataConMeta(pfProy.q, metaPFQ) : null;
+      const pMcust = pfProy?.m ? getProyDataConMeta(pfProy.m, metaPF)  : null;
+
+      if (pQcust || pMcust) {
+        html += `<div class="section-title">PF — ${labelLider}</div>
+                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">
+                   ${pQcust ? renderBloque(pQcust, vQ, abQ, 'Contratos',          'pf-q', false) : ''}
+                   ${pMcust ? renderBloque(pMcust, vM, abM, 'Valor Comisionable', 'pf-m', true)  : ''}
+                 </div>`;
+      }
+    }
+
+    if (showVU && (cvVULider.length > 0 || STATE.empresa === 'VU')) {
+      const metaVU = STATE.empresa === 'all'
+        ? (STATE.raw.metas_vu.find(m => normalName(m.lider) === resolverNombreMeta(liderActivo))?.metaValor || 0)
+        : metaLider.metaValor;
+      const metaVUQ = STATE.empresa === 'all'
+        ? (STATE.raw.metas_vu.find(m => normalName(m.lider) === resolverNombreMeta(liderActivo))?.metaCantidad || 0)
+        : metaLider.metaCantidad;
+
+      const vQ  = buildVentasDia(cvVULider, false);
+      const vM  = buildVentasDia(cvVULider, true);
+      const abQ = buildAbonadasDia(getAbonoPorLider(STATE.raw.abono_vu, liderActivo), false);
+      const abM = buildAbonadasDia(getAbonoPorLider(STATE.raw.abono_vu, liderActivo), true);
+      const pQcust = vuProy?.q ? getProyDataConMeta(vuProy.q, metaVUQ) : null;
+      const pMcust = vuProy?.m ? getProyDataConMeta(vuProy.m, metaVU)  : null;
+
+      if (pQcust || pMcust) {
+        html += `<div class="section-title">VU — ${labelLider}</div>
+                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">
+                   ${pQcust ? renderBloque(pQcust, vQ, abQ, 'Contratos',          'vu-q', false) : ''}
+                   ${pMcust ? renderBloque(pMcust, vM, abM, 'Valor Comisionable', 'vu-m', true)  : ''}
+                 </div>`;
+      }
+    }
+
+    if (!html) {
+      html = `<div class="empty-state"><div class="empty-icon">📈</div>
+              <div class="empty-title">Sin datos de proyección para ${labelLider}</div>
+              <div class="empty-sub">Verifica que el líder tenga metas asignadas y ventas en el período</div></div>`;
+    }
+
+  } else {
+    // ── VISTA SIN FILTRO DE LÍDER (comportamiento original) ─
+    if (showPF) {
+      const vQ  = buildVentasDia(STATE.raw.cv_pf.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO'), false);
+      const vM  = buildVentasDia(STATE.raw.cv_pf.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO'), true);
+      const abQ = buildAbonadasDia(STATE.raw.abono_pf, false);
+      const abM = buildAbonadasDia(STATE.raw.abono_pf, true);
+      html += `<div class="section-title">Protección Familiar</div>
+               <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">
+                 ${renderBloque(pfProy?.q, vQ, abQ, 'PF — Contratos',          'pf-q', false)}
+                 ${renderBloque(pfProy?.m, vM, abM, 'PF — Valor Comisionable', 'pf-m', true)}
+               </div>`;
+    }
+    if (showVU) {
+      const vQ  = buildVentasDia(STATE.raw.cv_vu.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO'), false);
+      const vM  = buildVentasDia(STATE.raw.cv_vu.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO'), true);
+      const abQ = buildAbonadasDia(STATE.raw.abono_vu, false);
+      const abM = buildAbonadasDia(STATE.raw.abono_vu, true);
+      html += `<div class="section-title">Valles Unidos</div>
+               <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">
+                 ${renderBloque(vuProy?.q, vQ, abQ, 'VU — Contratos',          'vu-q', false)}
+                 ${renderBloque(vuProy?.m, vM, abM, 'VU — Valor Comisionable', 'vu-m', true)}
+               </div>`;
+    }
+  }
+
+  document.getElementById('proyeccion-content').innerHTML = html;
+
+  // ── Gráficos ─────────────────────────────────────────────
+  setTimeout(() => {
+    const renderChart = (proyData, ventaDia, id, esValor) => {
+      const el = document.getElementById(id);
+      if (!proyData || !el) return;
+      destroyChart(id);
+
+      const meta  = proyData.meta;
+      const dias  = proyData.dias;
+
+      // Acumulado real
+      let acum = 0;
+      const realAcumArr = dias.map(d => {
+        acum += (ventaDia[d.dia]||0);
+        return d.dia <= hoy ? acum : null;
+      });
+
+      // Proyección dinámica: en cada día pasado, proyectar al cierre
+      const proyArr = dias.map(d => {
+        if (d.dia > hoy || PCT_DIA[d.dia] <= 0) return null;
+        let a = 0;
+        for (let x = 1; x <= d.dia; x++) a += (ventaDia[x]||0);
+        return a / PCT_DIA[d.dia];
+      });
+
+      STATE.charts[id] = new Chart(el, {
+        type: 'line',
+        data: {
+          labels: dias.map(d => 'D'+d.dia),
+          datasets: [
+            {
+              label: 'Meta Acum.',
+              data: dias.map(d => d.metaAcum),
+              borderColor: '#9CA3AF', borderDash:[5,4], pointRadius:0,
+              fill: false, tension:.3, borderWidth:1.5
+            },
+            {
+              label: 'Venta Real Acum.',
+              data: realAcumArr,
+              borderColor: '#2563EB', borderWidth:2.5,
+              pointRadius: dias.map(d => d.dia === hoy ? 5 : 2),
+              pointBackgroundColor: '#2563EB',
+              fill: false, tension:.3
+            },
+            {
+              label: 'Proyección Cierre',
+              data: proyArr,
+              borderColor: '#16A34A', borderDash:[6,3], pointRadius:0,
+              fill: false, tension:.3, borderWidth:1.5
+            }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { position:'bottom', labels:{ font:{size:10}, padding:12 } },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  if (ctx.raw === null) return null;
+                  return ` ${ctx.dataset.label}: ${esValor ? fmt(ctx.raw) : fmtN(Math.round(ctx.raw))}`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: { grid:{display:false}, ticks:{ font:{size:9}, maxTicksLimit:16 } },
+            y: { ticks:{ font:{size:9}, callback: v => esValor ? fmt(v) : fmtN(v) } }
+          }
+        }
+      });
+    };
+
+    if (liderActivo) {
+      const cvFiltrado = getCV();
+      const cvPFLider = cvFiltrado.filter(r => (r.EMPRESA||'').toString().toUpperCase().includes('PROTECCION') || (r.EMPRESA||'').toString().toUpperCase().includes('FAMILIAR'));
+      const cvVULider = cvFiltrado.filter(r => (r.EMPRESA||'').toString().toUpperCase().includes('VALLES'));
+      const metaLider = getMetaLider(liderActivo);
+      const nmLider   = resolverNombreMeta(liderActivo);
+
+      if (showPF) {
+        const metaPFQ = STATE.raw.metas_pf.find(m => normalName(m.lider) === nmLider)?.metaCantidad || metaLider.metaCantidad;
+        const metaPFM = STATE.raw.metas_pf.find(m => normalName(m.lider) === nmLider)?.metaValor    || metaLider.metaValor;
+        const pQc = pfProy?.q ? getProyDataConMeta(pfProy.q, metaPFQ) : null;
+        const pMc = pfProy?.m ? getProyDataConMeta(pfProy.m, metaPFM) : null;
+        renderChart(pQc, buildVentasDia(cvPFLider, false), 'ch-proy-pf-q', false);
+        renderChart(pMc, buildVentasDia(cvPFLider, true),  'ch-proy-pf-m', true);
+      }
+      if (showVU) {
+        const metaVUQ = STATE.raw.metas_vu.find(m => normalName(m.lider) === nmLider)?.metaCantidad || metaLider.metaCantidad;
+        const metaVUM = STATE.raw.metas_vu.find(m => normalName(m.lider) === nmLider)?.metaValor    || metaLider.metaValor;
+        const pQc = vuProy?.q ? getProyDataConMeta(vuProy.q, metaVUQ) : null;
+        const pMc = vuProy?.m ? getProyDataConMeta(vuProy.m, metaVUM) : null;
+        renderChart(pQc, buildVentasDia(cvVULider, false), 'ch-proy-vu-q', false);
+        renderChart(pMc, buildVentasDia(cvVULider, true),  'ch-proy-vu-m', true);
+      }
+    } else {
+      if (showPF) {
+        renderChart(pfProy?.q, buildVentasDia(STATE.raw.cv_pf.filter(r=>(r.ESTADO_CONTRATO||'').toUpperCase().trim()!=='INACTIVO'), false), 'ch-proy-pf-q', false);
+        renderChart(pfProy?.m, buildVentasDia(STATE.raw.cv_pf.filter(r=>(r.ESTADO_CONTRATO||'').toUpperCase().trim()!=='INACTIVO'), true),  'ch-proy-pf-m', true);
+      }
+      if (showVU) {
+        renderChart(vuProy?.q, buildVentasDia(STATE.raw.cv_vu.filter(r=>(r.ESTADO_CONTRATO||'').toUpperCase().trim()!=='INACTIVO'), false), 'ch-proy-vu-q', false);
+        renderChart(vuProy?.m, buildVentasDia(STATE.raw.cv_vu.filter(r=>(r.ESTADO_CONTRATO||'').toUpperCase().trim()!=='INACTIVO'), true),  'ch-proy-vu-m', true);
+      }
+    }
+  }, 0);
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER LÍDERES
+// ═══════════════════════════════════════════════════════════
+function renderLideres() {
+  const cv = getCV();
+  const abono = getAbono();
+  if (!cv.length) {
+    document.getElementById('lideres-content').innerHTML = `<div class="empty-state"><div class="empty-icon">🏆</div><div class="empty-title">Sin datos de ventas</div></div>`;
+    return;
+  }
+
+  // Agrupar por líder — excluir registros sin líder
+  const byLider = {};
+  cv.forEach(r => {
+    const l = (r.LIDER||'').toString().trim();
+    if (!l) return;
+    if (!byLider[l]) byLider[l] = { contratos:[], valor:0, asesores:new Set() };
+    byLider[l].contratos.push(r);
+    byLider[l].valor += parseFloat(r.VALOR_COMISIONABLE)||0;
+    if (r.ASESOR) byLider[l].asesores.add(r.ASESOR);
+  });
+
+  const abonoByLider = {};
+  abono.forEach(r => {
+    const l = r.LIDER||'Sin Líder';
+    if (!abonoByLider[l]) abonoByLider[l] = { count:0, valor:0 };
+    abonoByLider[l].count++;
+    abonoByLider[l].valor += parseFloat(r.PRECIO_VENTA)||0;
+  });
+
+  const metas = getMetas();
+
+  const cards = Object.entries(byLider).map(([nombre, data]) => {
+    const m = getMetaLider(nombre);
+    const metaCant  = m.metaCantidad || 0;
+    const metaValor = m.metaValor    || 0;
+    const pctC = pct(data.contratos.length, metaCant);
+    const pctV = pct(data.valor, metaValor);
+    const semC = semaforo(pctC);
+    const semV = semaforo(pctV);
+    const ab = abonoByLider[nombre] || { count:0, valor:0 };
+    const precioP = data.contratos.length ? data.valor / data.contratos.length : 0;
+    const hoy = new Date();
+    const diasMes = new Date(hoy.getFullYear(), hoy.getMonth()+1, 0).getDate();
+    const diaActual = hoy.getDate();
+    const proyC = diaActual > 0 ? Math.round(data.contratos.length * diasMes / diaActual) : 0;
+
+    // % pie promedio
+    const piePcts = data.contratos.map(r => {
+      const pie = parseFloat(r.PIE)||0;
+      const vc = parseFloat(r.VALOR_COMISIONABLE)||0;
+      return vc > 0 ? (pie/1.19)/vc : 0;
+    }).filter(v => v > 0);
+    const piePctProm = piePcts.length ? piePcts.reduce((s,v)=>s+v,0)/piePcts.length : 0;
+
+    return `
+    <div class="lider-card">
+      <div class="lider-header">
+        <div>
+          <div class="lider-name">${(nombre||'').toUpperCase()}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-direction:column;align-items:flex-end">
+          ${metaCant > 0 ? `<span class="kpi-badge ${semC.cls}">${semC.dot} ${semC.label} C</span>` : ''}
+          ${metaValor > 0 ? `<span class="kpi-badge ${semV.cls}">${semV.dot} ${semV.label} $</span>` : ''}
+        </div>
+      </div>
+      <div class="lider-kpis">
+        <div class="lider-kpi">
+          <div class="lider-kpi-label">Contratos</div>
+          <div class="lider-kpi-val">${data.contratos.length}</div>
+          ${metaCant > 0 ? `<div class="lider-kpi-sub">Meta: ${metaCant}</div>` : ''}
+        </div>
+        <div class="lider-kpi">
+          <div class="lider-kpi-label">Valor</div>
+          <div class="lider-kpi-val">${fmt(data.valor)}</div>
+          ${metaValor > 0 ? `<div class="lider-kpi-sub">Meta: ${fmt(metaValor)}</div>` : ''}
+        </div>
+        <div class="lider-kpi">
+          <div class="lider-kpi-label">Asesores</div>
+          <div class="lider-kpi-val">${data.asesores.size}</div>
+          <div class="lider-kpi-sub">vendiendo</div>
+        </div>
+        <div class="lider-kpi">
+          <div class="lider-kpi-label">Precio Prom</div>
+          <div class="lider-kpi-val">${fmt(precioP)}</div>
+        </div>
+        <div class="lider-kpi">
+          <div class="lider-kpi-label">Abonados</div>
+          <div class="lider-kpi-val">${ab.count}</div>
+          <div class="lider-kpi-sub">${fmt(ab.valor)}</div>
+        </div>
+        <div class="lider-kpi">
+          <div class="lider-kpi-label">Proyección</div>
+          <div class="lider-kpi-val">${proyC}</div>
+          <div class="lider-kpi-sub">al cierre</div>
+        </div>
+      </div>
+      ${metaCant > 0 ? `
+      <div class="kpi-label" style="margin-bottom:4px">Avance Contratos</div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill ${progressClass(pctC)}" style="width:${Math.min(pctC,100)}%"></div></div>
+      ` : ''}
+      ${metaValor > 0 ? `
+      <div class="kpi-label" style="margin-top:8px;margin-bottom:4px">Avance Valor</div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill ${progressClass(pctV)}" style="width:${Math.min(pctV,100)}%"></div></div>
+      ` : ''}
+      <div style="margin-top:10px;font-size:10px;color:var(--text3)">% Pie Promedio: ${(piePctProm*100).toFixed(1)}%</div>
+    </div>`;
+  });
+
+  document.getElementById('lideres-content').innerHTML = `
+    <div class="section-title">Resumen por Líder</div>
+    <div class="lider-grid">${cards.join('')}</div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER ASESORES
+// ═══════════════════════════════════════════════════════════
+function renderAsesores() {
+  const cv = getCV();
+  if (!cv.length) {
+    document.getElementById('asesores-content').innerHTML = `<div class="empty-state"><div class="empty-icon">🧑‍💼</div><div class="empty-title">Sin datos</div></div>`;
+    return;
+  }
+
+  const byAsesor = {};
+  cv.forEach(r => {
+    const a = r.ASESOR || 'Sin Asesor';
+    if (!byAsesor[a]) byAsesor[a] = { contratos:0, valor:0, lider: r.LIDER||'', empresa: r.EMPRESA||'' };
+    byAsesor[a].contratos++;
+    byAsesor[a].valor += parseFloat(r.VALOR_COMISIONABLE)||0;
+    // comisión
+    const pctCom = getComisionPct(r.CANTIDAD_CUOTAS, r.MEDIO_PAGO_ASIGNADO);
+    const comMonto = (parseFloat(r.VALOR_COMISIONABLE)||0) * pctCom;
+    if (!byAsesor[a].comision) byAsesor[a].comision = 0;
+    byAsesor[a].comision += comMonto;
+    byAsesor[a].cuotas = r.CANTIDAD_CUOTAS || 0;
+    byAsesor[a].pctCom = pctCom;
+  });
+
+  const rows = Object.entries(byAsesor).sort((a,b) => b[1].contratos - a[1].contratos);
+
+  document.getElementById('asesores-content').innerHTML = `
+    <div class="section-title">Panel por Asesor</div>
+    <div class="table-card">
+      <div class="table-header">
+        <span class="table-header-title">Asesores — ${rows.length} con ventas</span>
+        <button class="btn-export" onclick="exportTableToExcel('tbl-asesores','asesores')">⬇ Excel</button>
+      </div>
+      <div class="table-wrap">
+        <table id="tbl-asesores">
+          <thead><tr>
+            <th>#</th>
+            <th>Asesor</th>
+            <th>Líder</th>
+            <th class="num">Contratos</th>
+            <th class="num">Valor Comisionable</th>
+            <th class="num">Comisión Calculada</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map(([nombre, d], i) => `
+              <tr>
+                <td>${i+1}</td>
+                <td class="name">${nombre}</td>
+                <td class="name" style="font-size:11px;color:var(--text3)">${d.lider}</td>
+                <td class="num">${d.contratos}</td>
+                <td class="num">${fmt(d.valor)}</td>
+                <td class="num" style="color:var(--green);font-weight:600">${fmt(d.comision)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER ESTADÍSTICAS
+// ═══════════════════════════════════════════════════════════
+function renderEstadisticas() {
+  const cv = getCV();
+  if (!cv.length) {
+    document.getElementById('estadisticas-content').innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-title">Sin datos</div></div>`;
+    return;
+  }
+
+  // Región
+  const byRegion = {};
+  cv.forEach(r => { const k = r.REGION||'—'; byRegion[k] = (byRegion[k]||0)+1; });
+
+  // Comuna top 10
+  const byComuna = {};
+  cv.forEach(r => { const k = r.COMUNA||'—'; byComuna[k] = (byComuna[k]||0)+1; });
+  const topComuna = Object.entries(byComuna).sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+  // Edad (segmentos de 10)
+  const edadSegs = {};
+  cv.forEach(r => {
+    const age = calcAge(r.FECHA_NACIMIENTO);
+    if (age && age > 0 && age < 110) {
+      const seg = Math.floor(age/10)*10;
+      const label = `${seg}–${seg+9}`;
+      edadSegs[label] = (edadSegs[label]||0)+1;
+    }
+  });
+  const edadLabels = Object.keys(edadSegs).sort();
+
+  // Cuotas
+  const byCuotas = {};
+  cv.forEach(r => { const k = r.CANTIDAD_CUOTAS||0; byCuotas[k] = (byCuotas[k]||0)+1; });
+  const topCuotas = Object.entries(byCuotas).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  // Plan — 3 familias fijas
+  const byPlan = { 'RAICES DE VIDA':0, 'SEMILLAS DE LEGADO':0, 'TESOROS DEL ALMA':0 };
+  cv.forEach(r => {
+    const familia = cleanPlan(r.PLAN_VENTA_MODELO);
+    if (familia !== 'OTRO') byPlan[familia]++;
+  });
+  const topPlan = Object.entries(byPlan).filter(([,v]) => v > 0);
+
+  // Tipo contrato — 5 categorías fijas
+  const TIPOS_FIJOS = ['ADULTO MAYOR','PERSONAL','FAMILIAR','LIBRE','SIEMPRE JUNTOS'];
+  const byTipo = {};
+  TIPOS_FIJOS.forEach(t => byTipo[t] = 0);
+  cv.forEach(r => {
+    const raw = (r.TIPO_CONTRATO||'').toString().toUpperCase().trim();
+    const match = TIPOS_FIJOS.find(t => raw.includes(t));
+    if (match) byTipo[match]++;
+  });
+  const tipoActivos = TIPOS_FIJOS.filter(t => byTipo[t] > 0);
+  const totalTipo = tipoActivos.reduce((s,t) => s + byTipo[t], 0);
+
+  // Plan — totales para porcentajes
+  const totalPlan = topPlan.reduce((s,[,v]) => s+v, 0);
+
+  document.getElementById('estadisticas-content').innerHTML = `
+    <div class="section-title">Estadísticas de Negocio</div>
+    <div class="stats-grid">
+      <div class="chart-card">
+        <div class="chart-title">Por Región</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="ch-region"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Top Comunas</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="ch-comuna"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Edad Clientes (segmentos)</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="ch-edad"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Cantidad de Cuotas</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="ch-cuotas"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Plan de Venta</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="ch-plan"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Tipo de Contrato</div>
+        <div class="chart-wrap" style="height:240px"><canvas id="ch-tipo"></canvas></div>
+      </div>
+    </div>
+  `;
+
+  const COLORS = ['#2563EB','#16A34A','#CA8A04','#DC2626','#7C3AED','#0891B2','#DB2777','#EA580C','#65A30D','#0284C7'];
+  const TIPO_COLORS = { 'ADULTO MAYOR':'#2563EB','PERSONAL':'#16A34A','FAMILIAR':'#CA8A04','LIBRE':'#DC2626','SIEMPRE JUNTOS':'#7C3AED' };
+
+  setTimeout(() => {
+    ['ch-region','ch-comuna','ch-edad','ch-cuotas','ch-plan','ch-tipo'].forEach(id => destroyChart(id));
+
+    const hBar = (id, labels, data) => {
+      STATE.charts[id] = new Chart(document.getElementById(id), {
+        type:'bar',
+        data:{ labels, datasets:[{ data, backgroundColor: COLORS.slice(0,data.length), borderRadius:4 }] },
+        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} }, scales:{ x:{ ticks:{font:{size:9}} }, y:{ ticks:{font:{size:9}} } } }
+      });
+    };
+
+    hBar('ch-region', Object.keys(byRegion), Object.values(byRegion));
+    hBar('ch-comuna', topComuna.map(c=>c[0]), topComuna.map(c=>c[1]));
+    hBar('ch-edad', edadLabels, edadLabels.map(k=>edadSegs[k]));
+    hBar('ch-cuotas', topCuotas.map(c=>c[0]+' cuotas'), topCuotas.map(c=>c[1]));
+
+    // Plan de Venta — barras horizontales con % sobre cada barra
+    STATE.charts['ch-plan'] = new Chart(document.getElementById('ch-plan'), {
+      type: 'bar',
+      data: {
+        labels: topPlan.map(p => p[0]),
+        datasets: [{ data: topPlan.map(p => p[1]), backgroundColor: ['#2563EB','#16A34A','#CA8A04'], borderRadius: 5 }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          datalabels: { display: false }, // no usar plugin externo
+          tooltip: { callbacks: { label: ctx => `${ctx.raw} contratos (${totalPlan>0?(ctx.raw/totalPlan*100).toFixed(1):0}%)` } }
+        },
+        scales: {
+          x: { ticks: { font:{size:9} } },
+          y: { ticks: { font:{size:9} } }
+        },
+        animation: {
+          onComplete: function() {
+            // Dibujar % sobre las barras manualmente
+            const chart = this;
+            const ctx2 = chart.ctx;
+            ctx2.save();
+            ctx2.font = 'bold 11px DM Sans, sans-serif';
+            ctx2.fillStyle = '#0D1117';
+            ctx2.textAlign = 'left';
+            ctx2.textBaseline = 'middle';
+            chart.data.datasets.forEach((dataset, di) => {
+              chart.getDatasetMeta(di).data.forEach((bar, i) => {
+                const val = dataset.data[i];
+                const pctStr = totalPlan > 0 ? (val/totalPlan*100).toFixed(1)+'%' : '';
+                ctx2.fillText(' ' + pctStr, bar.x + 4, bar.y);
+              });
+            });
+            ctx2.restore();
+          }
+        }
+      }
+    });
+
+    // Tipo de Contrato — doughnut con % en labels, solo categorías con datos
+    STATE.charts['ch-tipo'] = new Chart(document.getElementById('ch-tipo'), {
+      type: 'doughnut',
+      data: {
+        labels: tipoActivos.map(t => `${t} (${totalTipo>0?(byTipo[t]/totalTipo*100).toFixed(1):0}%)`),
+        datasets: [{
+          data: tipoActivos.map(t => byTipo[t]),
+          backgroundColor: tipoActivos.map(t => TIPO_COLORS[t]||'#9CA3AF'),
+          borderWidth: 2,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { font:{size:10}, padding:10, boxWidth:12 }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const val = ctx.raw;
+                const p = totalTipo > 0 ? (val/totalTipo*100).toFixed(1) : 0;
+                return ` ${val} contratos — ${p}%`;
+              }
+            }
+          }
+        }
+      }
+    });
+  }, 0);
+}
+
+// ═══════════════════════════════════════════════════════════
+// CHART HELPERS
+// ═══════════════════════════════════════════════════════════
+function barOpts() {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: { x:{ grid:{display:false}, ticks:{font:{size:10}} }, y:{ ticks:{font:{size:10}} } }
+  };
+}
+function destroyChart(id) {
+  if (STATE.charts[id]) { STATE.charts[id].destroy(); delete STATE.charts[id]; }
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════════════════════
+function exportTableToExcel(tableId, name) {
+  const tbl = document.getElementById(tableId);
+  if (!tbl) return;
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.table_to_sheet(tbl);
+  XLSX.utils.book_append_sheet(wb, ws, name);
+  XLSX.writeFile(wb, `${name}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+function exportExcel() {
+  const cv = getCV();
+  if (!cv.length) { alert('No hay datos para exportar'); return; }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cv), 'Ventas');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(getAbono()), 'Abonados');
+  XLSX.writeFile(wb, `dashboard_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+function exportPDF() {
+  // Identificar la vista activa
+  const vistaActiva = document.querySelector('.view.active');
+  if (!vistaActiva) return;
+
+  const empresa = STATE.empresa === 'all' ? 'Todas' : STATE.empresa;
+  const fecha   = new Date().toLocaleDateString('es-CL');
+  const tabLabel = document.querySelector('.tab-btn.active')?.textContent?.trim() || 'Dashboard';
+
+  // Crear contenedor temporal para el PDF
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'background:#fff;padding:24px;font-family:DM Sans,sans-serif;';
+
+  // Encabezado del PDF
+  wrapper.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #0D1117;">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:#0D1117;">Sala de Dirección Comercial</div>
+        <div style="font-size:12px;color:#6B7280;margin-top:2px;">${tabLabel} — Empresa: ${empresa}</div>
+      </div>
+      <div style="font-size:11px;color:#9CA3AF;">Generado: ${fecha}</div>
+    </div>
+  `;
+
+  // Clonar contenido de la vista activa
+  const clone = vistaActiva.cloneNode(true);
+
+  // Quitar botones de exportar del clon
+  clone.querySelectorAll('.btn-export, .btn-clear-storage').forEach(b => b.remove());
+
+  // Asegurar que los canvas del clon contengan las imágenes de los gráficos
+  const originCanvas = vistaActiva.querySelectorAll('canvas');
+  const cloneCanvas  = clone.querySelectorAll('canvas');
+  originCanvas.forEach((orig, i) => {
+    if (cloneCanvas[i]) {
+      const img = document.createElement('img');
+      img.src = orig.toDataURL('image/png', 1.0);
+      img.style.cssText = `width:${orig.offsetWidth}px;max-width:100%;height:auto;`;
+      cloneCanvas[i].replaceWith(img);
+    }
+  });
+
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
+  const opt = {
+    margin:       [10, 10, 10, 10],
+    filename:     `dashboard_${tabLabel.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`,
+    image:        { type: 'jpeg', quality: 0.95 },
+    html2canvas:  { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' },
+    pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+  };
+
+  // Cambiar texto del botón durante la generación
+  const btnPDF = document.querySelector('[onclick="exportPDF()"]');
+  if (btnPDF) { btnPDF.textContent = '⏳ Generando...'; btnPDF.disabled = true; }
+
+  html2pdf().set(opt).from(wrapper).save().then(() => {
+    document.body.removeChild(wrapper);
+    if (btnPDF) { btnPDF.innerHTML = '⬇ PDF'; btnPDF.disabled = false; }
+  }).catch(err => {
+    console.error('Error PDF:', err);
+    document.body.removeChild(wrapper);
+    if (btnPDF) { btnPDF.innerHTML = '⬇ PDF'; btnPDF.disabled = false; }
+    alert('Error al generar PDF. Intenta de nuevo.');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// TIMESTAMP
+// ═══════════════════════════════════════════════════════════
+function updateTimestamp() {
+  const now = new Date();
+  document.getElementById('ts-label').textContent = 'Actualizado: ' + now.toLocaleTimeString('es-CL');
+}
+setInterval(() => {
+  const el = document.getElementById('ts-label');
+  if (el && el.textContent !== '—') {
+    // solo actualizar hora en tiempo real
+  }
+}, 60000);
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// SISTEMA GITHUB — Admin/Viewer
+// ═══════════════════════════════════════════════════════════
+
+// ── Contraseña admin: hash SHA-256 ───────────────────────
+// Contraseña por defecto: "CVD2024" — CAMBIAR ANTES DE PUBLICAR
+// Para generar nuevo hash, abrir consola del navegador y ejecutar:
+//   sha256("TuNuevaClave").then(h => console.log(h))
+const GH_PASSWORD_HASH = '7a3d3d5b27bca9d1a9b0f82e96a74e8a8c3f4e1d0c2b5a6e9f8d7c6b5a4e3d2c';
+
+const GH = { user:'', repo:'', token:'', isAdmin:false };
+const GH_FILES = {
+  metas_pf:'Metas_PF.xlsx', metas_vu:'Metas_VU.xlsx',
+  lideres:'Lideres_Activos.xlsx', proy_pf:'Proyeccion_PF.xlsx',
+  proy_vu:'Proyeccion_VU.xlsx', comisiones:'Comisiones.xlsx',
+  cv_pf:'CV_PF.xlsx', cv_vu:'CV_VU.xlsx',
+  abono_pf:'Abono_PF.xlsx', abono_vu:'Abono_VU.xlsx'
+};
+
+function mostrarPanelAdmin() {
+  document.getElementById('gh-admin-panel').style.display = '';
+  document.getElementById('gh-login-form').style.display = '';
+  document.getElementById('gh-admin-content').style.display = 'none';
+  document.getElementById('gh-login-error').style.display = 'none';
+  document.getElementById('gh-password').value = '';
+  setTimeout(() => document.getElementById('gh-password').focus(), 100);
+}
+function ocultarPanelAdmin() { document.getElementById('gh-admin-panel').style.display = 'none'; }
+function ghCerrarSesion() { GH.token=''; GH.isAdmin=false; document.getElementById('gh-admin-panel').style.display='none'; }
+
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+
+async function ghVerificarPassword() {
+  const pwd = document.getElementById('gh-password').value;
+  const hash = await sha256(pwd);
+  if (hash === GH_PASSWORD_HASH) {
+    GH.isAdmin = true;
+    document.getElementById('gh-login-form').style.display = 'none';
+    document.getElementById('gh-admin-content').style.display = '';
+    document.getElementById('gh-login-error').style.display = 'none';
+    ghCargarConfigUI();
+  } else {
+    document.getElementById('gh-login-error').style.display = '';
+    document.getElementById('gh-password').value = '';
+    document.getElementById('gh-password').focus();
+  }
+}
+
+async function ghCambiarPassword() {
+  const nueva = prompt('Nueva contraseña (mínimo 6 caracteres):');
+  if (!nueva || nueva.length < 6) { alert('Contraseña muy corta.'); return; }
+  if (nueva !== prompt('Confirmar contraseña:')) { alert('No coinciden.'); return; }
+  const hash = await sha256(nueva);
+  alert('✅ Nuevo hash generado:\n\n' + hash + '\n\nCopia este valor, reemplaza GH_PASSWORD_HASH en el HTML y vuelve a publicar el archivo.');
+}
+
+function ghGuardarConfig() {
+  GH.user  = document.getElementById('gh-user').value.trim();
+  GH.repo  = document.getElementById('gh-repo').value.trim();
+  GH.token = document.getElementById('gh-token').value.trim();
+  if (!GH.user || !GH.repo || !GH.token) { alert('Completa usuario, repositorio y token.'); return; }
+  saveToStorage('gh_config', { user: GH.user, repo: GH.repo });
+  alert('✅ Configuración guardada. El token solo persiste en esta sesión.');
+}
+
+function ghCargarConfigUI() {
+  openDB().then(db => {
+    const req = db.transaction(DB_STORE,'readonly').objectStore(DB_STORE).get('dash_gh_config');
+    req.onsuccess = () => {
+      if (req.result) { try { const c=JSON.parse(req.result); GH.user=c.user||''; GH.repo=c.repo||''; document.getElementById('gh-user').value=GH.user; document.getElementById('gh-repo').value=GH.repo; } catch(e){} }
+    };
+  }).catch(()=>{});
+}
+
+function ghCargarConfigViewer() {
+  openDB().then(db => {
+    const req = db.transaction(DB_STORE,'readonly').objectStore(DB_STORE).get('dash_gh_config');
+    req.onsuccess = () => {
+      if (req.result) {
+        try { const c=JSON.parse(req.result); GH.user=c.user||''; GH.repo=c.repo||''; }
+        catch(e){}
+      }
+      if (GH.user && GH.repo) ghCargarTodos();
+      else { document.getElementById('gh-config-aviso').style.display=''; }
+    };
+  }).catch(()=>{ document.getElementById('gh-config-aviso').style.display=''; });
+}
+
+function ghRawUrl(fn) { return `https://raw.githubusercontent.com/${GH.user}/${GH.repo}/main/datos/${fn}?t=${Date.now()}`; }
+function ghApiUrl(fn) { return `https://api.github.com/repos/${GH.user}/${GH.repo}/contents/datos/${fn}`; }
+
+async function ghCargarTodos() {
+  if (!GH.user || !GH.repo) { document.getElementById('gh-config-aviso').style.display=''; return; }
+  const st = document.getElementById('gh-files-status');
+  if (st) st.innerHTML = '<div style="grid-column:span 5;font-size:11px;color:var(--text3)">⏳ Cargando desde GitHub...</div>';
+  const resultados = [];
+  for (const [key, fn] of Object.entries(GH_FILES)) {
+    try {
+      const r = await fetch(ghRawUrl(fn), GH.token ? {headers:{Authorization:'token '+GH.token}} : {});
+      if (!r.ok) throw new Error(r.status);
+      const buf = await r.arrayBuffer();
+      await procesarBuffer(buf, key, fn);
+      resultados.push({fn, ok:true}); markLoaded(key, fn);
+    } catch(e) { resultados.push({fn, ok:false}); }
+  }
+  if (st) st.innerHTML = resultados.map(r=>`<div style="background:${r.ok?'var(--green-bg)':'var(--surface2)'};border:1px solid ${r.ok?'var(--green)':'var(--border)'};border-radius:6px;padding:7px 10px"><div style="font-size:10px;font-weight:700;color:${r.ok?'var(--green)':'var(--text3)'}">${r.ok?'✓':'—'} ${r.fn.replace('.xlsx','')}</div></div>`).join('');
+  const lu = document.getElementById('gh-last-update');
+  if (lu) lu.textContent = 'Actualizado: ' + new Date().toLocaleString('es-CL');
+  populateFilters(); renderAll(); updateTimestamp();
+  if (STATE.raw.cv_pf.length || STATE.raw.cv_vu.length) showTab('ejecutivo', document.querySelectorAll('.tab-btn')[0]);
+}
+
+async function ghSubirArchivo(event, key, fn) {
+  if (!GH.isAdmin || !GH.token) { alert('Inicia sesión como administrador primero.'); return; }
+  if (!GH.user || !GH.repo) { alert('Guarda la configuración de GitHub primero.'); return; }
+  const file = event.target.files[0]; if (!file) return;
+  const ucId = 'uc-' + key.replace(/_/g,'-');
+  const st = document.getElementById(ucId+'-status');
+  const card = document.getElementById(ucId);
+  try {
+    if (st) st.textContent = '⏳ Subiendo...';
+    if (card) card.style.opacity = '0.6';
+    const buf = await file.arrayBuffer();
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    let sha = '';
+    try { const r=await fetch(ghApiUrl(fn),{headers:{Authorization:'token '+GH.token,Accept:'application/vnd.github+json'}}); if(r.ok){const d=await r.json(); sha=d.sha||'';} } catch(e){}
+    const resp = await fetch(ghApiUrl(fn), {
+      method:'PUT', headers:{Authorization:'token '+GH.token, Accept:'application/vnd.github+json','Content-Type':'application/json'},
+      body: JSON.stringify({message:`📊 Actualizar ${fn} — ${new Date().toLocaleString('es-CL')}`, content:b64, ...(sha?{sha}:{})})
+    });
+    if (!resp.ok) { const err=await resp.json(); throw new Error(err.message||'Error GitHub API'); }
+    await procesarBuffer(buf, key, fn);
+    markLoaded(key, fn);
+    if (st) st.textContent = '✅ '+new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+    if (card) { card.style.opacity='1'; card.classList.add('loaded'); }
+    populateFilters(); renderAll();
+  } catch(e) {
+    console.error(e);
+    if (st) st.textContent = '❌ '+e.message;
+    if (card) card.style.opacity='1';
+    alert('Error al subir: '+e.message);
+  }
+}
+
+function procesarBuffer(buf, key, fn) {
+  return new Promise(resolve => {
+    const wb = XLSX.read(buf, {type:'array', cellDates:true});
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    if (key==='proy_pf'||key==='proy_vu') parseProy(wb,key);
+    else if (key==='comisiones') parseComisiones(wb);
+    else if (key==='metas_pf'||key==='metas_vu') parseMetas(sheet,key);
+    else if (key==='lideres') parseLideres(sheet);
+    else { const rows=XLSX.utils.sheet_to_json(sheet,{defval:''}); STATE.raw[key]=rows; saveToStorage(key,rows); }
+    resolve();
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initFromStorage();
+  ghCargarConfigViewer();
+  const btnArchivos = document.querySelectorAll('.tab-btn')[5];
+  if (btnArchivos) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('view-archivos').classList.add('active');
+    btnArchivos.classList.add('active');
+  }
+});
+</script>
+</body>
+</html>
