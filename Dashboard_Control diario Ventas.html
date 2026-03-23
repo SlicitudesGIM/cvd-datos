@@ -2469,7 +2469,8 @@ setInterval(() => {
 const GH_PASSWORD_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
 
 
-const GH = { user:'', repo:'', token:'', isAdmin:false };
+//const GH = { user:'', repo:'', token:'', isAdmin:false };
+const GH = { user:'SlicitudesGIM', repo:'cvd-datos', token:'', isAdmin:false }; 
 const GH_FILES = {
   metas_pf:'Metas_PF.xlsx', metas_vu:'Metas_VU.xlsx',
   lideres:'Lideres_Activos.xlsx', proy_pf:'Proyeccion_PF.xlsx',
@@ -2536,6 +2537,7 @@ function ghCargarConfigUI() {
   }).catch(()=>{});
 }
 
+/*
 function ghCargarConfigViewer() {
   openDB().then(db => {
     const req = db.transaction(DB_STORE,'readonly').objectStore(DB_STORE).get('dash_gh_config');
@@ -2549,6 +2551,18 @@ function ghCargarConfigViewer() {
     };
   }).catch(()=>{ document.getElementById('gh-config-aviso').style.display=''; });
 }
+*/
+  
+function ghCargarConfigViewer() {
+  if (GH.user && GH.repo) {
+    document.getElementById('gh-config-aviso').style.display = 'none';
+    ghCargarTodos();
+  } else {
+    document.getElementById('gh-config-aviso').style.display = '';
+  }
+}
+  
+  
 
 function ghRawUrl(fn) { return `https://raw.githubusercontent.com/${GH.user}/${GH.repo}/main/datos/${fn}?t=${Date.now()}`; }
 function ghApiUrl(fn) { return `https://api.github.com/repos/${GH.user}/${GH.repo}/contents/datos/${fn}`; }
