@@ -568,7 +568,7 @@ tbody td.name { font-weight: 500; max-width: 180px; overflow: hidden; text-overf
         </div>
       </div>
     </div>
-    <div class="upload-section">
+   <div class="upload-section" style="display:none">
       <div class="upload-section-title">📆 Archivos Diarios (reemplazar cada día)</div>
       <div class="upload-grid">
         <div class="upload-card" id="uc-cv-pf">
@@ -2607,11 +2607,14 @@ async function ghSubirArchivo(event, key, fn) {
       body: JSON.stringify({message:`📊 Actualizar ${fn} — ${new Date().toLocaleString('es-CL')}`, content:b64, ...(sha?{sha}:{})})
     });
     if (!resp.ok) { const err=await resp.json(); throw new Error(err.message||'Error GitHub API'); }
-    await procesarBuffer(buf, key, fn);
+      await procesarBuffer(buf, key, fn);
     markLoaded(key, fn);
-    if (st) st.textContent = '✅ '+new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+
+    if (st) st.textContent = '✅ ' + new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
     if (card) { card.style.opacity='1'; card.classList.add('loaded'); }
-    populateFilters(); renderAll();
+
+    
+    await ghCargarTodos();
   } catch(e) {
     console.error(e);
     if (st) st.textContent = '❌ '+e.message;
@@ -2644,6 +2647,14 @@ document.addEventListener('DOMContentLoaded', () => {
     btnArchivos.classList.add('active');
   }
 });
+
+  // Auto refresco para viewers cada 60 segundos
+setInterval(() => {
+  if (!GH.isAdmin) {
+    ghCargarTodos();
+  }
+}, 60000);
+  
 </script>
 </body>
 </html>
