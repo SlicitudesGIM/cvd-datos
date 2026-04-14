@@ -897,7 +897,7 @@ function getLideresDeDistrito(distrito) {
   // Fuente 1 — BBDD asesores activos
   const bbdd = STATE.raw.asesores_activos || [];
   bbdd.forEach(r => {
-    const d = (r['DISTRITO'] || r['Distrito'] || '').toString().trim();
+    const d = (r['DISTRITO'] || r['DISTRITO FINAL'] || r['DISTRITO INICIAL'] || r['Distrito'] || '').toString().trim();
     const l = (r['NOMBRE LÍDER'] || r['NOMBRE LIDER'] || r['Nombre Líder'] || '').toString().trim();
     if (normalName(d) === normalName(distrito) && l) claves.add(resolverNombreMeta(l));
   });
@@ -963,9 +963,11 @@ function getAsesoresActivos(liderFiltro) {
   return rows.filter(r => {
     const estado = (r['ESTADO'] || r['Estado'] || '').toString().trim().toUpperCase();
     const cargo  = (r['CARGO']  || r['Cargo']  || '').toString().trim().toUpperCase();
-    const lider  = (r['NOMBRE LÍDER'] || r['NOMBRE LIDER'] || r['Nombre Líder'] || r['Nombre Lider'] || '').toString().trim();
-    const dist   = (r['DISTRITO'] || r['Distrito'] || '').toString().trim();
-    if (estado !== 'ACTIVO' || !cargo.includes('ASESOR') || !lider) return false;
+    const lider  = (r['NOMBRE LÍDER'] || r['NOMBRE LIDER'] || r['Nombre Líder'] || r['Nombre Lider'] || r['LIDER'] || '').toString().trim();
+    const dist   = (r['DISTRITO'] || r['DISTRITO FINAL'] || r['DISTRITO INICIAL'] || r['Distrito'] || '').toString().trim();
+    // CARGO puede no existir en formato nuevo — si no hay cargo, se asume asesor
+    const esAsesor = !cargo || cargo === '' || cargo.includes('ASESOR');
+    if (estado !== 'ACTIVO' || !esAsesor || !lider) return false;
     // Filtro distrito
     if (lideresDistrito) {
       if (dist && normalName(dist) !== normalName(STATE.distrito)) return false;
@@ -980,7 +982,7 @@ function getAsesoresActivos(liderFiltro) {
 function getAsesoresActivosPorLider() {
   const mapa = {};
   getAsesoresActivos().forEach(r => {
-    const lider = (r['NOMBRE LÍDER'] || r['NOMBRE LIDER'] || r['Nombre Líder'] || r['Nombre Lider'] || '').toString().trim();
+    const lider = (r['NOMBRE LÍDER'] || r['NOMBRE LIDER'] || r['Nombre Líder'] || r['Nombre Lider'] || r['LIDER'] || '').toString().trim();
     if (lider) mapa[lider] = (mapa[lider] || 0) + 1;
   });
   return mapa;
@@ -1251,7 +1253,7 @@ function renderEjecutivo() {
   const _conVentaSet = new Set(cv.map(r => normalName(r.ASESOR || '')).filter(Boolean));
   // Asesores activos SIN venta — mismo cruce que usa el modal
   const totalSinVenta = asesoresActivos.filter(r => {
-    const nombre = (r['NOMBRE COMPLETO'] || '').toString().trim();
+    const nombre = (r['NOMBRE COMPLETO'] || r['ASESOR'] || '').toString().trim();
     return nombre && !_conVentaSet.has(normalName(nombre));
   }).length;
   // Asesores activos CON venta (para badges de productividad)
@@ -2203,9 +2205,13 @@ function renderProyeccion() {
     renderBloqueTabla(proyData, ventaDia, abonoDia, label, idSuffix, esValor);
 
   // ── Construir HTML ───────────────────────────────────────
-  let html = '';
+  // Título principal solo cuando hay empresa o líder filtrado (en modo all los subtítulos internos bastan)
+  const tituloEmpresa = STATE.empresa === 'PF' ? 'Protección Familiar'
+    : STATE.empresa === 'VU' ? 'Valles Unidos'
+    : 'Todas las Empresas';
+  const tituloLider = STATE.lider ? ` · ${STATE.lider.toUpperCase()}` : '';
+  let html = `<div class="section-title">📈 Proyección — ${tituloEmpresa}${tituloLider}</div>`;
 
-  // Si hay líder seleccionado, calcular meta del líder y usar CV filtrado
   const liderActivo = STATE.lider;
 
   const getProyDataConMeta = (proyDataBase, metaLider) => {
@@ -2297,35 +2303,67 @@ function renderProyeccion() {
     }
 
   } else {
-    // ── VISTA SIN FILTRO DE LÍDER (comportamiento original) ─
-    if (showPF) {
+    // ── VISTA SIN FILTRO DE LÍDER ────────────────────────────
+    // Si se filtra por empresa: una sola gráfica + tabla por métrica
+    // Si es "Todas": PF arriba + VU abajo
+
+    if (STATE.empresa === 'all') {
+      // Ambas empresas — sin subtítulos internos, el título global lo dice todo
+      if (showPF) {
+        const vQ  = buildVentasDia(STATE.raw.cv_pf.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO'), false);
+        const vM  = buildVentasDia(STATE.raw.cv_pf.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO'), true);
+        const abQ = buildAbonadasDia(STATE.raw.abono_pf, false);
+        const abM = buildAbonadasDia(STATE.raw.abono_pf, true);
+        html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:12px">
+                   ${renderBloqueGrafico(pfProy?.m, vM, abM, 'Valor Comisionable (PF)', 'pf-m', true)}
+                   ${renderBloqueGrafico(pfProy?.q, vQ, abQ, 'Contratos (PF)',           'pf-q', false)}
+                 </div>
+                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">
+                   ${renderBloqueTabla(pfProy?.m, vM, abM, 'Valor Comisionable (PF)', 'pf-m', true)}
+                   ${renderBloqueTabla(pfProy?.q, vQ, abQ, 'Contratos (PF)',           'pf-q', false)}
+                 </div>`;
+      }
+      if (showVU) {
+        const vQ  = buildVentasDia(STATE.raw.cv_vu.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO'), false);
+        const vM  = buildVentasDia(STATE.raw.cv_vu.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO'), true);
+        const abQ = buildAbonadasDia(STATE.raw.abono_vu, false);
+        const abM = buildAbonadasDia(STATE.raw.abono_vu, true);
+        html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:12px">
+                   ${renderBloqueGrafico(vuProy?.m, vM, abM, 'Valor Comisionable (VU)', 'vu-m', true)}
+                   ${renderBloqueGrafico(vuProy?.q, vQ, abQ, 'Contratos (VU)',           'vu-q', false)}
+                 </div>
+                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">
+                   ${renderBloqueTabla(vuProy?.m, vM, abM, 'Valor Comisionable (VU)', 'vu-m', true)}
+                   ${renderBloqueTabla(vuProy?.q, vQ, abQ, 'Contratos (VU)',           'vu-q', false)}
+                 </div>`;
+      }
+    } else if (STATE.empresa === 'PF') {
+      // Solo Protección Familiar — título global ya lo indica
       const vQ  = buildVentasDia(STATE.raw.cv_pf.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO'), false);
       const vM  = buildVentasDia(STATE.raw.cv_pf.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO'), true);
       const abQ = buildAbonadasDia(STATE.raw.abono_pf, false);
       const abM = buildAbonadasDia(STATE.raw.abono_pf, true);
-      html += `<div class="section-title">Protección Familiar</div>
-               <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:12px">
-                 ${renderBloqueGrafico(pfProy?.m, vM, abM, 'PF — Valor Comisionable', 'pf-m', true)}
-                 ${renderBloqueGrafico(pfProy?.q, vQ, abQ, 'PF — Contratos',          'pf-q', false)}
+      html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:12px">
+                 ${renderBloqueGrafico(pfProy?.m, vM, abM, 'Valor Comisionable', 'pf-m', true)}
+                 ${renderBloqueGrafico(pfProy?.q, vQ, abQ, 'Contratos',          'pf-q', false)}
                </div>
                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">
-                 ${renderBloqueTabla(pfProy?.m, vM, abM, 'PF — Valor Comisionable', 'pf-m', true)}
-                 ${renderBloqueTabla(pfProy?.q, vQ, abQ, 'PF — Contratos',          'pf-q', false)}
+                 ${renderBloqueTabla(pfProy?.m, vM, abM, 'Valor Comisionable', 'pf-m', true)}
+                 ${renderBloqueTabla(pfProy?.q, vQ, abQ, 'Contratos',          'pf-q', false)}
                </div>`;
-    }
-    if (showVU) {
+    } else if (STATE.empresa === 'VU') {
+      // Solo Valles Unidos — título global ya lo indica
       const vQ  = buildVentasDia(STATE.raw.cv_vu.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO'), false);
       const vM  = buildVentasDia(STATE.raw.cv_vu.filter(r => (r.ESTADO_CONTRATO||'').toUpperCase().trim() !== 'INACTIVO'), true);
       const abQ = buildAbonadasDia(STATE.raw.abono_vu, false);
       const abM = buildAbonadasDia(STATE.raw.abono_vu, true);
-      html += `<div class="section-title">Valles Unidos</div>
-               <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:12px">
-                 ${renderBloqueGrafico(vuProy?.m, vM, abM, 'VU — Valor Comisionable', 'vu-m', true)}
-                 ${renderBloqueGrafico(vuProy?.q, vQ, abQ, 'VU — Contratos',          'vu-q', false)}
+      html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:12px">
+                 ${renderBloqueGrafico(vuProy?.m, vM, abM, 'Valor Comisionable', 'vu-m', true)}
+                 ${renderBloqueGrafico(vuProy?.q, vQ, abQ, 'Contratos',          'vu-q', false)}
                </div>
                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">
-                 ${renderBloqueTabla(vuProy?.m, vM, abM, 'VU — Valor Comisionable', 'vu-m', true)}
-                 ${renderBloqueTabla(vuProy?.q, vQ, abQ, 'VU — Contratos',          'vu-q', false)}
+                 ${renderBloqueTabla(vuProy?.m, vM, abM, 'Valor Comisionable', 'vu-m', true)}
+                 ${renderBloqueTabla(vuProy?.q, vQ, abQ, 'Contratos',          'vu-q', false)}
                </div>`;
     }
   }
@@ -2358,29 +2396,40 @@ function renderProyeccion() {
       });
 
       STATE.charts[id] = new Chart(el, {
-        type: 'line',
+        type: 'bar',
         data: {
           labels: dias.map(d => 'D'+d.dia),
           datasets: [
             {
+              // Barras de proyección — detrás (order:0)
+              type: 'bar',
+              label: 'Proyección Cierre',
+              data: proyArr,
+              backgroundColor: 'rgba(22,163,74,0.15)',
+              borderColor: 'rgba(22,163,74,0.35)',
+              borderWidth: 1,
+              borderRadius: 3,
+              order: 3
+            },
+            {
+              // Línea meta — encima
+              type: 'line',
               label: 'Meta Acum.',
               data: dias.map(d => d.metaAcum),
               borderColor: '#9CA3AF', borderDash:[5,4], pointRadius:0,
-              fill: false, tension:.3, borderWidth:1.5
+              fill: false, tension:.3, borderWidth:1.5,
+              order: 2
             },
             {
+              // Línea ventas reales — encima de todo
+              type: 'line',
               label: 'Venta Real Acum.',
               data: realAcumArr,
               borderColor: '#2563EB', borderWidth:2.5,
               pointRadius: dias.map(d => d.dia === hoy ? 5 : 2),
               pointBackgroundColor: '#2563EB',
-              fill: false, tension:.3
-            },
-            {
-              label: 'Proyección Cierre',
-              data: proyArr,
-              borderColor: '#16A34A', borderDash:[6,3], pointRadius:0,
-              fill: false, tension:.3, borderWidth:1.5
+              fill: false, tension:.3,
+              order: 1
             }
           ]
         },
@@ -2946,10 +2995,6 @@ setInterval(() => {
 // ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════
-// SISTEMA GITHUB — Admin/Viewer
-// ═══════════════════════════════════════════════════════════
-
 
 // ═══════════════════════════════════════════════════════════
 // SISTEMA GITHUB — Admin/Viewer
@@ -3267,8 +3312,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initFromStorage();
   ghCargarConfigViewer();
 });
-
-
 
 // ═══════════════════════════════════════════════════════════
 // GESTIÓN DE ARCHIVOS — Modal
@@ -3600,11 +3643,11 @@ function abrirModalSinVenta() {
   // Filtrar activos sin venta y construir datos
   _msvDatos = activos
     .filter(r => {
-      const nombre = (r['NOMBRE COMPLETO'] || '').toString().trim();
+      const nombre = (r['NOMBRE COMPLETO'] || r['ASESOR'] || '').toString().trim();
       return nombre && !conVenta.has(normalName(nombre));
     })
     .map((r, i) => {
-      const nombre    = (r['NOMBRE COMPLETO'] || '').toString().trim();
+      const nombre    = (r['NOMBRE COMPLETO'] || r['ASESOR'] || '').toString().trim();
       const fechaRaw  = r['FECHA DE INGRESO'];
       let fechaIngreso = null, diasEmpresa = '—';
       if (fechaRaw) {
@@ -3743,33 +3786,19 @@ function mgSincronizarEstados() {
 }
 
 function mgLoadFile(event, key) {
-  if (GH.isAdmin) {
-    if (!GH_FILES[key]) {
-      alert('Este archivo no está configurado para GitHub todavía.');
-      return;
-    }
-    ghSubirArchivo(event, key, GH_FILES[key]);
-    return;
-  }
-
   const file = event.target.files[0];
   if (!file) return;
-
   const id   = MG_MAP[key];
   const card = document.getElementById(id);
   const st   = document.getElementById(id + '-status');
-
-  if (st) st.textContent = '⏳ Cargando...';
+  if (st)   st.textContent = '⏳ Cargando...';
   if (card) card.style.opacity = '0.6';
-
   const filename = file.name;
   const reader = new FileReader();
-
   reader.onload = function(e) {
     try {
-      const wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
+      const wb    = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
       const sheet = wb.Sheets[wb.SheetNames[0]];
-
       if (key === 'asesores_activos') {
         STATE.raw.asesores_activos = XLSX.utils.sheet_to_json(sheet, { defval: '' });
         saveToStorage('asesores_activos', STATE.raw.asesores_activos);
@@ -3786,34 +3815,24 @@ function mgLoadFile(event, key) {
         STATE.raw[key] = rows;
         saveToStorage(key, rows);
       }
-
-      const hora = new Date().toLocaleTimeString('es-CL', { hour:'2-digit', minute:'2-digit' });
-
+      const hora = new Date().toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'});
       if (st) {
-        const nombre = filename.length > 24 ? filename.substring(0,24) + '…' : filename;
+        const nombre = filename.length > 24 ? filename.substring(0,24)+'…' : filename;
         st.innerHTML = '✓ ' + hora + '<br><span style="font-size:9px;color:#4B5563">' + nombre + '</span>';
       }
-
-      if (card) {
-        card.style.opacity = '1';
-        card.classList.add('loaded');
-      }
-
+      if (card) { card.style.opacity = '1'; card.classList.add('loaded'); }
       markLoaded(key, filename);
       updateTimestamp();
       populateFilters();
       renderAll();
     } catch(err) {
       console.error('Error cargando archivo:', err);
-      if (st) st.textContent = '❌ Error al leer';
+      if (st)   st.textContent = '❌ Error al leer';
       if (card) card.style.opacity = '1';
     }
   };
-
   reader.readAsBinaryString(file);
 }
-
-
 </script>
 
 <!-- ══ MODAL: ASESORES VENDIENDO ══════════════════════════════════════════ -->
@@ -4001,8 +4020,7 @@ function mgLoadFile(event, key) {
     </div>
 
     <div style="padding:28px;">
-	
-	  <!-- PANEL VIEWER -->
+
 <div class="upload-section" id="gh-viewer-panel">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
     <div class="upload-section-title" style="margin:0">📊 Estado de Datos</div>
@@ -4094,7 +4112,7 @@ function mgLoadFile(event, key) {
           <div style="background:var(--accent);border-radius:6px;padding:5px 11px;font-size:10px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.6px;">
             📅 Mensual
           </div>
-          <div style="font-size:13px;font-weight:700;color:var(--text);"> Archivos Mensuales</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);">Archivos Mensuales</div>
           <div style="flex:1;height:1px;background:var(--border);"></div>
           <div style="font-size:10px;color:var(--text3);">Actualizar 1 vez al mes</div>
         </div>
